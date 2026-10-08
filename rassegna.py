@@ -64,11 +64,25 @@ Struttura il testo così:
 <p>[Riflessione finale di Bruno Rachiele]</p>
 """
 
-response = client.models.generate_content(
-    model='gemini-3.8-flash',
-    contents=prompt,
-)
-html_content = response.text
+# Tentativo con modelli alternativi in caso di sovraccarico (503)
+modelli = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash']
+html_content = ""
+
+for modello in modelli:
+    try:
+        print(f"Provo a generare la rassegna con {modello}...")
+        response = client.models.generate_content(
+            model=modello,
+            contents=prompt,
+        )
+        html_content = response.text
+        print(f"✅ Rassegna generata con successo usando {modello}")
+        break
+    except Exception as e:
+        print(f"⚠️ Errore con {modello}: {e}. Provo il modello successivo...")
+
+if not html_content:
+    raise RuntimeError("❌ Tutti i modelli Gemini sono temporaneamente non disponibili.")
 
 # Unisce le foto recuperate al commento dell'IA
 contenuto_finale = html_content + "<hr/>" + foto_html
@@ -89,5 +103,5 @@ try:
     server.quit()
     print("✅ Rassegna e foto inviate con successo a Blogger!")
 except Exception as e:
-    print(f"❌ Errore durante l'invio: {e}")
+    print(f"❌ Errore durante l'invio SMTP: {e}")
     raise e
