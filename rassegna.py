@@ -1,4 +1,52 @@
-# 4. Generazione Rassegna Stampa
+import os
+import datetime
+import smtplib
+import requests
+from bs4 import BeautifulSoup
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from google import genai
+
+# 1. Recupera credenziali da GitHub Secrets
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
+
+if not all([GEMINI_API_KEY, BLOGGER_EMAIL, SENDER_EMAIL, SENDER_PASSWORD]):
+    raise ValueError("❌ Uno o più Secrets non sono presenti su GitHub!")
+
+# 2. Definisci prima la data e il client
+data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+# 3. Scraping Immagini
+def recupera_prime_pagine():
+    html_foto = "<h3>📷 Le Prime Pagine di Oggi</h3><div style='display:flex; flex-wrap:wrap; gap:10px;'>"
+    try:
+        url = "https://www.giornali.it/prime-pagine/"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        images = soup.find_all('img', limit=6)
+        found = False
+        for img in images:
+            src = img.get('src') or img.get('data-src')
+            if src and ('jpg' in src or 'png' in src or 'webp' in src):
+                if not src.startswith('http'):
+                    src = "https:" + src if src.startswith('//') else url + src
+                html_foto += f"<div style='margin-bottom:15px;'><img src='{src}' style='max-width:100%; height:auto; border:1px solid #ccc; border-radius:5px;' /></div>"
+                found = True
+        html_foto += "</div>"
+        return html_foto if found else ""
+    except Exception as e:
+        print(f"⚠️ Errore scraping immagini: {e}")
+        return ""
+
+foto_html = recupera_prime_pagine()
+
+# 4. Prompt per la Rassegna
 prompt = f"""
 Sei un giornalista politico ed editor-in-chief.
 Elabora un commento e una rassegna sintetica delle prime pagine dei principali quotidiani italiani di oggi ({data_oggi}).
@@ -21,23 +69,42 @@ Struttura il testo così:
 
 print("🧠 Generazione testo con Gemini...")
 
-# Usiamo l'alias generico oppure la ricerca dinamica del modello disponibile
+# Trova automaticamente il primo modello valido disponibile sul tuo account
+modello_scelto = None
 try:
-    response = client.models.generate_content(
-        model='gemini-flash',
-        contents=prompt,
-    )
-except Exception:
-    # Fallback automatico cercando il primo modello che supporta la generazione
-    modelli_disponibili = [
-        m.name for m in client.models.list() 
-        if "generateContent" in getattr(m, "supported_generation_methods", [])
-    ]
-    modello_valido = modelli_disponibili[0] if modelli_disponibili else "gemini-2.0-flash"
-    print(f"🔄 Uso il modello rilevato automaticamente: {modello_valido}")
-    response = client.models.generate_content(
-        model=modello_valido,
-        contents=prompt,
-    )
+    for m in client.models.list():
+        if "generateContent" in getattr(m, "supported_generation_methods", []):
+            modello_scelto = m.name
+            break
+except Exception as e:
+    print(f"Impossibile elencare i modelli: {e}")
 
+if not modello_scelto:
+    modello_scelto = "gemini-2.5-flash"
+
+print(f"🔄 Uso il modello: {modello_scelto}")
+response = client.models.generate_content(
+    model=modello_scelto,
+    contents=prompt,
+)
 html_content = response.text
+
+contenuto_finale = html_content + "<hr/>" + foto_html
+
+# 5. Invio Email via SMTP SSL (Porta 465)
+msg = MIMEMultipart()
+msg['From'] = SENDER_EMAIL
+msg['To'] = BLOGGER_EMAIL
+msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi}"
+msg.attach(MIMEText(contenuto_finale, 'html'))
+
+try:
+    print("📧 Invio email a Blogger...")
+    server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+    server.login(SENDER_EMAIL, SENDER_PASSWORD)
+    server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
+    server.quit()
+    print("✅ Rassegna inviata e pubblicata con successo!")
+except Exception as e:
+    print(f"❌ Errore durante l'invio email: {e}")
+    raise e
