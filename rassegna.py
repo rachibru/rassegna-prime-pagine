@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import google.generativeai as genai
+from google import genai
 
 # 1. Recupera le credenziali da GitHub Secrets
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -13,12 +13,8 @@ BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 
-# Controllo credenziali essenziali
-if not GEMINI_API_KEY or not BLOGGER_EMAIL or not SENDER_EMAIL or not SENDER_PASSWORD:
-    raise ValueError("❌ Errore: Uno o più Secrets su GitHub non sono impostati correttamente!")
-
-# 2. Configura Gemini IA
-genai.configure(api_key=GEMINI_API_KEY)
+# 2. Configura Client Gemini
+client = genai.Client(api_key=GEMINI_API_KEY)
 data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
 
 # 3. Recupera le immagini delle prime pagine del giorno
@@ -26,7 +22,7 @@ def recupera_prime_pagine():
     html_foto = "<h3>📷 Le Prime Pagine di Oggi</h3><div style='display:flex; flex-wrap:wrap; gap:10px;'>"
     try:
         url = "https://www.giornali.it/prime-pagine/"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -68,16 +64,11 @@ Struttura il testo così:
 <p>[Riflessione finale di Bruno Rachiele]</p>
 """
 
-# Utilizza il modello aggiornato di Gemini
-try:
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    response = model.generate_content(prompt)
-    html_content = response.text
-except Exception as e:
-    print(f"Tentativo con gemini-2.5-flash fallito ({e}), provo con gemini-1.5-flash...")
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    response = model.generate_content(prompt)
-    html_content = response.text
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents=prompt,
+)
+html_content = response.text
 
 # Unisce le foto recuperate al commento dell'IA
 contenuto_finale = html_content + "<hr/>" + foto_html
@@ -98,5 +89,5 @@ try:
     server.quit()
     print("✅ Rassegna e foto inviate con successo a Blogger!")
 except Exception as e:
-    print(f"❌ Errore durante l'invio SMTP: {e}")
+    print(f"❌ Errore durante l'invio: {e}")
     raise e
