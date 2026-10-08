@@ -7,16 +7,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
 
-# 1. Recupera credenziali da GitHub Secrets
+# 1. Credenziali
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 
-if not all([GEMINI_API_KEY, BLOGGER_EMAIL, SENDER_EMAIL, SENDER_PASSWORD]):
-    raise ValueError("❌ Uno o più Secrets non sono presenti su GitHub!")
-
-# 2. Definisci prima la data e il client
+# 2. Setup Data e Client
 data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -41,12 +38,12 @@ def recupera_prime_pagine():
         html_foto += "</div>"
         return html_foto if found else ""
     except Exception as e:
-        print(f"⚠️ Errore scraping immagini: {e}")
+        print(f"⚠️ Errore foto: {e}")
         return ""
 
 foto_html = recupera_prime_pagine()
 
-# 4. Prompt per la Rassegna
+# 4. Prompt
 prompt = f"""
 Sei un giornalista politico ed editor-in-chief.
 Elabora un commento e una rassegna sintetica delle prime pagine dei principali quotidiani italiani di oggi ({data_oggi}).
@@ -67,31 +64,24 @@ Struttura il testo così:
 <p>[Riflessione finale di Bruno Rachiele]</p>
 """
 
-print("🧠 Generazione testo con Gemini...")
-
-# Trova automaticamente il primo modello valido disponibile sul tuo account
-modello_scelto = None
+# 5. Generazione Testo con Fallback Modello
+print("🧠 Generazione testo...")
 try:
-    for m in client.models.list():
-        if "generateContent" in getattr(m, "supported_generation_methods", []):
-            modello_scelto = m.name
-            break
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt,
+    )
 except Exception as e:
-    print(f"Impossibile elencare i modelli: {e}")
+    print(f"⚠️ Fallback modello a causa di: {e}")
+    response = client.models.generate_content(
+        model='gemini-1.5-flash',
+        contents=prompt,
+    )
 
-if not modello_scelto:
-    modello_scelto = "gemini-2.5-flash"
-
-print(f"🔄 Uso il modello: {modello_scelto}")
-response = client.models.generate_content(
-    model=modello_scelto,
-    contents=prompt,
-)
 html_content = response.text
-
 contenuto_finale = html_content + "<hr/>" + foto_html
 
-# 5. Invio Email via SMTP SSL (Porta 465)
+# 6. Invio Email SSL (Porta 465)
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
@@ -104,7 +94,7 @@ try:
     server.login(SENDER_EMAIL, SENDER_PASSWORD)
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
     server.quit()
-    print("✅ Rassegna inviata e pubblicata con successo!")
+    print("✅ PUBBLICAZIONE RIUSCITA!")
 except Exception as e:
-    print(f"❌ Errore durante l'invio email: {e}")
+    print(f"❌ Errore SMTP: {e}")
     raise e
