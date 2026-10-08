@@ -2,21 +2,20 @@ name: Automazione Rassegna Stampa
 
 on:
   schedule:
-    # Esegue ogni mattina alle 04:00 UTC (05:00/06:00 italiane)
     - cron: '0 4 * * *'
-  workflow_dispatch: # Permette di avviarlo manualmente per i test
+  workflow_dispatch:
 
 jobs:
   run-rassegna:
     runs-on: ubuntu-latest
     steps:
       - name: Scarica repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Imposta Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Installa pacchetti
         run: pip install google-generativeai requests beautifulsoup4
@@ -27,5 +26,4 @@ jobs:
           BLOGGER_EMAIL: ${{ secrets.BLOGGER_EMAIL }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
-        run: python ${{ github.workspace }}/rassegna.py
-
+        run: python rassegna.py
