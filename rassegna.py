@@ -1,4 +1,5 @@
 import os
+import time
 import datetime
 import smtplib
 import requests
@@ -64,25 +65,29 @@ Struttura il testo così:
 <p>[Riflessione finale di Bruno Rachiele]</p>
 """
 
-# Tentativo con modelli alternativi in caso di sovraccarico (503)
-modelli = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash']
+# Usiamo i modelli supportati con tentativi multipli in caso di errore 503
+modelli = ['gemini-3.8-flash', 'gemini-2.5-flash']
 html_content = ""
 
 for modello in modelli:
-    try:
-        print(f"Provo a generare la rassegna con {modello}...")
-        response = client.models.generate_content(
-            model=modello,
-            contents=prompt,
-        )
-        html_content = response.text
-        print(f"✅ Rassegna generata con successo usando {modello}")
+    for tentativo in range(3):
+        try:
+            print(f"Provo a generare la rassegna con {modello} (Tentativo {tentativo + 1})...")
+            response = client.models.generate_content(
+                model=modello,
+                contents=prompt,
+            )
+            html_content = response.text
+            print(f"✅ Rassegna generata con successo usando {modello}!")
+            break
+        except Exception as e:
+            print(f"⚠️ Errore con {modello}: {e}")
+            time.sleep(5) # Attende 5 secondi prima di riprovare
+    if html_content:
         break
-    except Exception as e:
-        print(f"⚠️ Errore con {modello}: {e}. Provo il modello successivo...")
 
 if not html_content:
-    raise RuntimeError("❌ Tutti i modelli Gemini sono temporaneamente non disponibili.")
+    raise RuntimeError("❌ Impossibile generare la rassegna dopo diversi tentativi.")
 
 # Unisce le foto recuperate al commento dell'IA
 contenuto_finale = html_content + "<hr/>" + foto_html
