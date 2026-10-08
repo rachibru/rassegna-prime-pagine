@@ -1,24 +1,23 @@
 import os
-import time
 import datetime
 import smtplib
 import requests
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from google import genai
+import google.generativeai as genai
 
-# 1. Recupera le credenziali da GitHub Secrets
+# 1. Recupera credenziali
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 
-# 2. Configura Client Gemini
-client = genai.Client(api_key=GEMINI_API_KEY)
+# 2. Configura Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
 
-# 3. Recupera le immagini delle prime pagine del giorno
+# 3. Scraping foto
 def recupera_prime_pagine():
     html_foto = "<h3>📷 Le Prime Pagine di Oggi</h3><div style='display:flex; flex-wrap:wrap; gap:10px;'>"
     try:
@@ -39,12 +38,12 @@ def recupera_prime_pagine():
         html_foto += "</div>"
         return html_foto if found else ""
     except Exception as e:
-        print(f"⚠️ Impossibile recuperare le immagini: {e}")
+        print(f"⚠️ Errore scraping foto: {e}")
         return ""
 
 foto_html = recupera_prime_pagine()
 
-# 4. Prompt per la rassegna di Gemini
+# 4. Generazione Rassegna
 prompt = f"""
 Sei un giornalista politico ed editor-in-chief.
 Elabora un commento e una rassegna sintetica delle prime pagine dei principali quotidiani italiani di oggi ({data_oggi}).
@@ -65,39 +64,24 @@ Struttura il testo così:
 <p>[Riflessione finale di Bruno Rachiele]</p>
 """
 
-# Usa solo i modelli di ultima generazione supportati
-modelli = ['gemini-3.8-flash', 'gemini-3.5-flash']
-html_content = ""
+# Generazione con il modello standard stabile
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    response = model.generate_content(prompt)
+    html_content = response.text
+except Exception as e:
+    print(f"Fallback su gemini-pro dovuto a: {e}")
+    model = genai.GenerativeModel('gemini-pro')
+    response = model.generate_content(prompt)
+    html_content = response.text
 
-for modello in modelli:
-    for tentativo in range(3):
-        try:
-            print(f"Provo a generare la rassegna con {modello} (Tentativo {tentativo + 1})...")
-            response = client.models.generate_content(
-                model=modello,
-                contents=prompt,
-            )
-            html_content = response.text
-            print(f"✅ Rassegna generata con successo usando {modello}!")
-            break
-        except Exception as e:
-            print(f"⚠️ Errore con {modello}: {e}")
-            time.sleep(5)
-    if html_content:
-        break
-
-if not html_content:
-    raise RuntimeError("❌ Impossibile generare la rassegna dopo diversi tentativi.")
-
-# Unisce le foto recuperate al commento dell'IA
 contenuto_finale = html_content + "<hr/>" + foto_html
 
-# 5. Invia l'email a Blogger per la pubblicazione
+# 5. Invio Email
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
 msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi}"
-
 msg.attach(MIMEText(contenuto_finale, 'html'))
 
 try:
@@ -106,7 +90,7 @@ try:
     server.login(SENDER_EMAIL, SENDER_PASSWORD)
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
     server.quit()
-    print("✅ Rassegna e foto inviate con successo a Blogger!")
+    print("✅ Rassegna inviata con successo!")
 except Exception as e:
-    print(f"❌ Errore durante l'invio SMTP: {e}")
+    print(f"❌ Errore SMTP: {e}")
     raise e
