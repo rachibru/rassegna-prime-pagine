@@ -65,8 +65,8 @@ Struttura il testo così:
 <p>[Riflessione finale di Bruno Rachiele]</p>
 """
 
-# Usiamo i modelli supportati con tentativi multipli in caso di errore 503
-modelli = ['gemini-3.8-flash', 'gemini-2.5-flash']
+# Usa solo i modelli di ultima generazione supportati
+modelli = ['gemini-3.8-flash', 'gemini-3.5-flash']
 html_content = ""
 
 for modello in modelli:
@@ -82,7 +82,7 @@ for modello in modelli:
             break
         except Exception as e:
             print(f"⚠️ Errore con {modello}: {e}")
-            time.sleep(5) # Attende 5 secondi prima di riprovare
+            time.sleep(5)
     if html_content:
         break
 
