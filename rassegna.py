@@ -7,21 +7,20 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
 
-# 1. Recupera credenziali da GitHub Secrets
+# 1. Recupera credenziali
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 
-# Controllo presenza credenziali
 if not all([GEMINI_API_KEY, BLOGGER_EMAIL, SENDER_EMAIL, SENDER_PASSWORD]):
-    raise ValueError("❌ Uno o più Secrets non sono stati configurati su GitHub!")
+    raise ValueError("❌ Uno o più Secrets non sono presenti su GitHub!")
 
-# 2. Configura Client Gemini (Libreria aggiornata google-genai)
+# 2. Inizializza Client Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
 data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
 
-# 3. Scraping immagini prime pagine
+# 3. Scraping Immagini
 def recupera_prime_pagine():
     html_foto = "<h3>📷 Le Prime Pagine di Oggi</h3><div style='display:flex; flex-wrap:wrap; gap:10px;'>"
     try:
@@ -42,7 +41,7 @@ def recupera_prime_pagine():
         html_foto += "</div>"
         return html_foto if found else ""
     except Exception as e:
-        print(f"⚠️ Errore durante lo scraping delle immagini: {e}")
+        print(f"⚠️ Errore scraping immagini: {e}")
         return ""
 
 foto_html = recupera_prime_pagine()
@@ -74,11 +73,10 @@ response = client.models.generate_content(
     contents=prompt,
 )
 html_content = response.text
-print("✅ Testo generato con successo!")
 
 contenuto_finale = html_content + "<hr/>" + foto_html
 
-# 5. Invio email tramite SMTP SSL (Porta 465)
+# 5. Invio Email via SMTP SSL (Porta 465)
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
@@ -86,12 +84,12 @@ msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi}"
 msg.attach(MIMEText(contenuto_finale, 'html'))
 
 try:
-    print("📧 Invio email in corso via SSL (Porta 465)...")
+    print("📧 Invio email a Blogger...")
     server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
     server.login(SENDER_EMAIL, SENDER_PASSWORD)
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
     server.quit()
-    print("✅ Rassegna inviata con successo a Blogger!")
+    print("✅ Rassegna inviata e pubblicata con successo!")
 except Exception as e:
-    print(f"❌ Errore durante l'invio SMTP: {e}")
+    print(f"❌ Errore durante l'invio email: {e}")
     raise e
