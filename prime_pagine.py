@@ -5,8 +5,8 @@ from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+# Titolo esatto della tua pagina su Blogger e ID fisso
 PAGE_TITLE = "#primepagine"
-# Impostiamo l'ID esatto della tua pagina su Blogger
 TARGET_PAGE_ID = "4213404198440467971"
 
 QUOTIDIANI_MAP = [
@@ -205,19 +205,20 @@ def main():
     blogger_service = build("blogger", "v3", credentials=creds)
 
     body_page = {
+        "id": TARGET_PAGE_ID,
         "title": PAGE_TITLE,
         "content": final_html
     }
 
-    # Forziamo l'aggiornamento (patch) direttamente sull'ID specifico della tua pagina
-    print(f"Aggiornamento della Pagina fissa con ID {TARGET_PAGE_ID}...")
-    updated_page = blogger_service.pages().patch(
+    print(f"Aggiornamento e pubblicazione della pagina '{PAGE_TITLE}' (ID: {TARGET_PAGE_ID})...")
+    updated_page = blogger_service.pages().update(
         blogId=blog_id,
         pageId=TARGET_PAGE_ID,
-        body=body_page
+        body=body_page,
+        publish=True
     ).execute()
     
-    print(f"Pagina aggiornata con successo! URL: {updated_page.get('url')}")
+    print(f"Pagina aggiornata e pubblicata con successo! URL: {updated_page.get('url')}")
 
 if __name__ == "__main__":
     main()
