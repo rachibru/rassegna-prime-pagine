@@ -6,8 +6,9 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 PAGE_TITLE = "Prime Pagine dei Giornali"
+# Impostiamo l'ID esatto della tua pagina su Blogger
+TARGET_PAGE_ID = "4213404198440467971"
 
-# Mappa dei quotidiani con la relativa pagina di riferimento
 QUOTIDIANI_MAP = [
     {"name": "Corriere della Sera", "url": "https://www.giornalone.it/prima-pagina-corriere-della-sera/"},
     {"name": "La Repubblica", "url": "https://www.giornalone.it/prima-pagina-la-repubblica/"},
@@ -26,7 +27,6 @@ QUOTIDIANI_MAP = [
 ]
 
 def fetch_prime_pagine():
-    """Estrae l'immagine della prima pagina per ogni quotidiano configurato."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
@@ -38,20 +38,16 @@ def fetch_prime_pagine():
         page_url = item["url"]
         
         try:
-            print(f"Estrazione prima pagina per: {name}...")
             response = requests.get(page_url, headers=headers, timeout=12)
             if response.status_code != 200:
-                print(f"[-] Errore HTTP {response.status_code} su {name}")
                 continue
 
             soup = BeautifulSoup(response.text, "html.parser")
             
-            # Cerca l'immagine principale della copertina nella pagina specifica
             img_tag = soup.find("img", id=lambda x: x and "copertina" in x.lower()) or \
                       soup.find("img", class_=lambda x: x and "copertina" in x.lower()) or \
                       soup.find("img", alt=lambda x: x and "prima pagina" in x.lower())
 
-            # Se non la trova con id/class, prende la prima immagine dentro il contenuto principale
             if not img_tag:
                 main_div = soup.find("div", class_="entry-content") or soup.find("article")
                 if main_div:
@@ -60,7 +56,6 @@ def fetch_prime_pagine():
             if img_tag:
                 src = img_tag.get("src") or img_tag.get("data-src") or ""
                 
-                # Normalizza URL relativi
                 if src.startswith("//"):
                     src = "https:" + src
                 elif src.startswith("/"):
@@ -71,16 +66,10 @@ def fetch_prime_pagine():
                         "title": name,
                         "image_url": src
                     })
-                    print(f"[+] Estratta copertina per {name}")
-                else:
-                    print(f"[-] URL immagine non valido per {name}")
-            else:
-                print(f"[-] Immagine non trovata per {name}")
 
         except Exception as e:
-            print(f"[-] Errore durante l'estrazione di {name}: {e}")
+            print(f"Errore su {name}: {e}")
 
-    print(f"\nTotale prime pagine estratte con successo: {len(papers)}/{len(QUOTIDIANI_MAP)}")
     return papers
 
 def main():
@@ -179,7 +168,6 @@ def main():
 
     cards_html = ""
     for p in papers:
-        # Nota: L'immagine si apre in una scheda separata direttamente alla foto originale senza link verso siti terzi
         cards_html += f"""
     <div class="paper-card">
       <div class="paper-img-container">
@@ -216,36 +204,20 @@ def main():
 
     blogger_service = build("blogger", "v3", credentials=creds)
 
-    # Cerca la pagina fissa per aggiornarla, altrimenti ne crea una nuova
-    pages_list = blogger_service.pages().list(blogId=blog_id).execute()
-    existing_page_id = None
-
-    if "items" in pages_list:
-        for page in pages_list["items"]:
-            if page.get("title") == PAGE_TITLE:
-                existing_page_id = page.get("id")
-                break
-
     body_page = {
         "title": PAGE_TITLE,
         "content": final_html
     }
 
-    if existing_page_id:
-        print(f"Aggiornamento della Pagina fissa esistente (ID: {existing_page_id})...")
-        updated_page = blogger_service.pages().patch(
-            blogId=blog_id,
-            pageId=existing_page_id,
-            body=body_page
-        ).execute()
-        print(f"Pagina aggiornata con successo! URL: {updated_page.get('url')}")
-    else:
-        print("Creazione nuova Pagina fissa...")
-        created_page = blogger_service.pages().insert(
-            blogId=blog_id,
-            body=body_page
-        ).execute()
-        print(f"Nuova Pagina creata con successo! URL: {created_page.get('url')}")
+    # Forziamo l'aggiornamento (patch) direttamente sull'ID specifico della tua pagina
+    print(f"Aggiornamento della Pagina fissa con ID {TARGET_PAGE_ID}...")
+    updated_page = blogger_service.pages().patch(
+        blogId=blog_id,
+        pageId=TARGET_PAGE_ID,
+        body=body_page
+    ).execute()
+    
+    print(f"Pagina aggiornata con successo! URL: {updated_page.get('url')}")
 
 if __name__ == "__main__":
     main()
