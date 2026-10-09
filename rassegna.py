@@ -47,26 +47,41 @@ def main():
 
     sys_instruction = (
         "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
-        "Scrivi rassegne stampa politiche quotidiane chiare, ben strutturate, trasmettendo una visione favorevole all'operato del Governo, "
-        "evidenziando i risultati della maggioranza e analizzando in modo critico le posizioni dell'opposizione."
+        "Scrivi rassegne stampa politiche quotidiane chiare, ben strutturate e formattate in HTML visivamente impeccabile, "
+        "trasmettendo una visione favorevole all'operato del Governo, evidenziando i risultati della maggioranza e "
+        "analizzando in modo critico ma elegante le posizioni dell'opposizione."
     )
 
     prompt = f"""
-    Scrivi una rassegna stampa politica per la giornata di oggi ({today_str}).
+    Scrivi la rassegna stampa politica per la giornata di oggi ({today_str}).
 
-    STRUTTURA OBBLIGATORIA (usa solo tag HTML come <h2>, <p>, <ul>, <li>, <strong>):
-    - La prima riga in assoluto deve essere il titolo dell'articolo formattato come <h1>TITOLO DELL'ARTICOLO</h1> (fai un titolo SEO accattivante con la data di oggi).
-    - <h2>In Primo Piano</h2>: Sintesi e fatti principali dei giornali di oggi.
-    - <h2>Governo e Maggioranza</h2>: I provvedimenti, le riforme e i successi del Governo.
-    - <h2>Le Opposizioni</h2>: Analisi critica del dibattito e delle contromosse dell'opposizione.
-    - <h2>Economia e Lavoro</h2>: Focus sui dati economici e le politiche di crescita.
-    - <h2>La Riflessione di Bruno Rachiele</h2>: Un paragrafo incisivo con una tua riflessione personale d'autore a sostegno della stabilita politica e dello sviluppo del Paese.
-    - <h2>Conclusione</h2>: Un breve commento di chiusura.
+    STRUTTURA OBBLIGATORIA DELLE SEZIONI:
+    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1>.
+    
+    Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML così strutturato:
+    
+    <div class="news-card">
+      <div class="card-header">
+        <span class="card-icon">📌</span>
+        <h2>In Primo Piano</h2>
+      </div>
+      <div class="card-body">
+        <p>Sintesi dei fatti principali della giornata...</p>
+      </div>
+    </div>
+
+    Crea esattamente questi 6 box card:
+    1. <h2>In Primo Piano</h2> (Icona: 📌) - Sintesi e fatti principali.
+    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e successi del Governo.
+    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Analisi critica del dibattito e delle contromosse dell'opposizione.
+    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Focus sui dati economici e politiche di crescita.
+    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore a sostegno della stabilità politica.
+    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento di chiusura.
     """
 
     raw_html = get_gemini_content(gemini_client, prompt, sys_instruction)
 
-    # Estrae il titolo <h1> e il resto del corpo
+    # Estrae il titolo <h1> e isola il contenuto
     lines = raw_html.strip().split("\n")
     post_title = f"Rassegna Stampa Politica del {today_str}"
     body_content = raw_html
@@ -77,13 +92,97 @@ def main():
             body_content = raw_html.replace(line, "").strip()
             break
 
-    # Costruzione HTML con l'immagine in evidenza in cima
-    header_html = (
-        f'<div style="text-align: center; margin-bottom: 25px;">'
-        f'<img src="{HEADER_IMAGE_URL}" alt="{post_title}" style="max-width: 100%; height: auto; border-radius: 8px;" />'
-        f'</div>\n'
-    )
-    final_article_html = header_html + body_content
+    # Stili CSS incorporati e Mobile-Friendly
+    custom_css = """
+<style>
+  .rassegna-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #2c3e50;
+    line-height: 1.6;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 10px;
+  }
+  .rassegna-header-img {
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    margin-bottom: 25px;
+    display: block;
+  }
+  .news-card {
+    background: #ffffff;
+    border: 1px solid #eef2f5;
+    border-left: 5px solid #1a365d;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+    margin-bottom: 24px;
+    padding: 20px 24px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .news-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #f0f4f8;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .card-icon {
+    font-size: 1.4rem;
+    margin-right: 10px;
+  }
+  .card-header h2 {
+    font-size: 1.25rem !important;
+    color: #1a365d !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: 700 !important;
+    border: none !important;
+  }
+  .card-body p {
+    font-size: 1.02rem;
+    color: #4a5568;
+    margin-bottom: 12px;
+  }
+  .card-body p:last-child {
+    margin-bottom: 0;
+  }
+  .card-body ul {
+    padding-left: 20px;
+    margin: 10px 0;
+  }
+  .card-body li {
+    margin-bottom: 6px;
+    color: #4a5568;
+  }
+  @media (max-width: 600px) {
+    .rassegna-container {
+      padding: 5px;
+    }
+    .news-card {
+      padding: 16px 18px;
+      margin-bottom: 18px;
+    }
+    .card-header h2 {
+      font-size: 1.1rem !important;
+    }
+  }
+</style>
+"""
+
+    # Unione di CSS + Immagine Copertina + Box Contenuto
+    final_article_html = f"""
+{custom_css}
+<div class="rassegna-container">
+  <img src="{HEADER_IMAGE_URL}" alt="{post_title}" class="rassegna-header-img" />
+  {body_content}
+</div>
+"""
 
     # 3. Autenticazione OAuth 2.0 per Blogger API v3
     creds = Credentials(
@@ -115,7 +214,7 @@ def main():
 
     print(f"Post pubblicato con successo! URL: {post_url}")
 
-    # 5. Step 2: Iniezione Schema.org NewsArticle sincronizzato
+    # 5. Step 2: Iniezione Schema.org NewsArticle
     iso_date = datetime.datetime.now().isoformat()
     schema_org_script = f"""
 <script type="application/ld+json">
@@ -157,7 +256,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Schema.org iniettato correttamente!")
+    print("Layout responsive e Schema.org sincronizzati!")
 
 if __name__ == "__main__":
     main()
