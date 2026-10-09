@@ -1,14 +1,37 @@
 import os
 import json
+import time
 import datetime
 from google import genai
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 # ==============================================================================
-# INSERISCI QUI IL LINK DELLA TUA IMMAGINE PREDEFINITA
+# CONFIGURAZIONE IMMAGINE PREDEFINITA
 # ==============================================================================
 DEFAULT_IMAGE_URL = "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80"
+
+def generate_content_with_fallback(client, prompt):
+    """Prova a generare il contenuto gestendo eventuali errori 503 temporanei dei server Google."""
+    models_to_try = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+    
+    for model_name in models_to_try:
+        for attempt in range(3): # Effettua fino a 3 tentativi per modello
+            try:
+                print(f"Tentativo di generazione con il modello {model_name} (tentativo {attempt + 1})...")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config={
+                        "response_mime_type": "application/json"
+                    }
+                )
+                return response.text
+            except Exception as e:
+                print(f"Errore temporaneo con {model_name}: {e}")
+                time.sleep(5) # Attendi 5 secondi prima di riprovare
+                
+    raise RuntimeError("Tutti i tentativi di generazione con i modelli Gemini sono falliti per sovraccarico dei server.")
 
 def main():
     # 1. Recupera le credenziali dall'ambiente (GitHub Secrets)
@@ -44,19 +67,13 @@ def main():
     }}
     """
 
-    response = gemini_client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt,
-        config={
-            "response_mime_type": "application/json"
-        }
-    )
+    response_text = generate_content_with_fallback(gemini_client, prompt)
 
-    data = json.loads(response.text)
+    data = json.loads(response_text)
     post_title = data.get("title")
     article_html = data.get("content")
 
-    # Inserimento dell'immagine scelta da te in cima all'articolo
+    # Inserimento dell'immagine scelta in cima all'articolo
     header_img_tag = f'<div style="text-align: center; margin-bottom: 20px;"><img src="{DEFAULT_IMAGE_URL}" alt="{post_title}" style="max-width: 100%; height: auto; border-radius: 8px;" /></div>\n'
     full_content_html = header_img_tag + article_html
 
@@ -90,7 +107,7 @@ def main():
 
     print(f"Post pubblicato! ID: {post_id} - URL: {post_url}")
 
-    # 5. Step 2: Iniezione dello Schema.org NewsArticle (con il tuo link immagine)
+    # 5. Step 2: Iniezione dello Schema.org NewsArticle
     iso_date = datetime.datetime.now().isoformat()
     schema_org_script = f"""
 <script type="application/ld+json">
@@ -132,7 +149,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Post aggiornato con successo! Immagine personalizzata, sezioni tematiche e Schema.org pronti.")
+    print("Post aggiornato con successo!")
 
 if __name__ == "__main__":
     main()
