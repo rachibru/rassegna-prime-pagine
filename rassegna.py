@@ -87,7 +87,7 @@ def main():
 
     # Estrae il titolo <h1> e isola il contenuto
     lines = raw_html.strip().split("\n")
-    post_title = f"Rassegna Stampa Politica del {today_str}"
+    post_title = f"Rassegna Stampa del {today_str}"
     body_content = raw_html
 
     for line in lines:
@@ -219,7 +219,7 @@ def main():
     body_initial = {
         "title": post_title,
         "content": final_article_html,
-        "labels": ["Rassegna Stampa", "Politica Italiana"]
+        "labels": ["Rassegna Stampa"]
     }
 
     published_post = blogger_service.posts().insert(
