@@ -30,25 +30,12 @@ IMMAGINE_PRINCIPALE = "https://images.unsplash.com/photo-1504711434969-e33886168
 # 3. Recupero Prime Pagine da Link Diretti & Dinamici
 def recupera_prime_pagine():
     candidate_urls = [
-        # Corriere della Sera
         "https://static2.rcsobjects.it/images/corrierefc_nazionale_web-Big.jpg",
-        
-        # La Stampa
         "https://www.lastampa.it/edicola/api/cover.php?newspaper=LASTAMPA&edition=TORINO&width=330&height=450",
-        
-        # Il Sole 24 Ore (URL Dinamico)
         f"https://mobapp2.ilsole24ore.com/_deploy/S24/{data_yyyymmdd}/SOLE/{data_yyyymmdd}083258000/covers/cover_high.jpg",
-        
-        # Il Secolo XIX
         "https://www.gelestatic.it/storage/quotidiani-locali/testate/copertina_ilsecoloxix_genova_w510.jpeg",
-        
-        # Il Foglio
         "https://eu01.newsmemory.com/?pSetup=ilfoglio&getprima&editionname=Il%20Foglio",
-        
-        # Il Giornale (NewsMemory CDN)
         f"https://eu1-bcdn.newsmemory.com//default_native_optionspage.php?os=web&isDebug=false&pSetup=ilgiornale&version=1.11.3&action=issueImage&type=text&issue={data_yyyymmdd}&edition=Nazionale",
-        
-        # Libero (NewsMemory CDN)
         f"https://eu1-bcdn.newsmemory.com//default_native_optionspage.php?os=web&isDebug=false&pSetup=libero&version=1.11.3&action=issueImage&type=text&issue={data_yyyymmdd}&edition=Libero"
     ]
 
@@ -58,7 +45,6 @@ def recupera_prime_pagine():
 
     immagini_valide = []
 
-    # Verifica validità URL
     for url in candidate_urls:
         try:
             res = requests.head(url, headers=headers, timeout=5, allow_redirects=True)
@@ -71,7 +57,6 @@ def recupera_prime_pagine():
         except Exception as e:
             print(f"⚠️ Impossibile verificare {url}: {e}")
 
-    # Fallback tramite scraping se le edicole dirette sono temporaneamente offline
     if len(immagini_valide) < 3:
         try:
             res = requests.get("https://www.giornali.it/prime-pagine/", headers=headers, timeout=8)
@@ -86,7 +71,6 @@ def recupera_prime_pagine():
         except Exception as e:
             print(f"⚠️ Scraping fallback fallito: {e}")
 
-    # Costruzione Blocco HTML Galleria
     if immagini_valide:
         html_foto = """
         <div style='margin-top: 35px; border-top: 2px solid #eee; padding-top: 20px;'>
@@ -137,31 +121,95 @@ schema_json = {
 
 schema_html = f'<script type="application/ld+json">\n{json.dumps(schema_json, indent=2)}\n</script>'
 
-# Header con Immagine
 header_html = f"""
 <div style="text-align: center; margin-bottom: 25px;">
   <img src="{IMMAGINE_PRINCIPALE}" alt="Rassegna Stampa Politica" style="width: 100%; max-height: 350px; object-fit: cover; border-radius: 8px;" />
 </div>
 """
 
-# 5. Prompt per Generazione Testo (Linea Editoriale & Stampa Estera)
-prompt = f"""
-Sei un autorevole giornalista ed editor politico d'area conservatrice e di centrodestra (vicino alla linea del Governo Meloni).
-Elabora un commento analitico e una rassegna sintetica delle prime pagine dei quotidiani di oggi ({data_oggi_str}).
+# 5. Prompt pulito senza errori di sintassi
+prompt = (
+    "Sei un autorevole giornalista ed editor politico d'area conservatrice e di centrodestra (vicino alla linea del Governo Meloni).\n"
+    f"Elabora un commento analitico e una rassegna sintetica delle prime pagine dei quotidiani di oggi ({data_oggi_str}).\n\n"
+    "Mantieni uno stile autorevole, lucido e professionale, valorizzando la stabilità dell'esecutivo, il pragmatismo delle riforme economiche e la difesa dell'interesse nazionale.\n\n"
+    "Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <body>) rispettando esattamente questa struttura e stili inline:\n\n"
+    "<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2c3e50; max-width: 800px; margin: 0 auto; padding: 10px; line-height: 1.6;\">\n"
+    f"  <h2 style=\"color: #1a252f; border-bottom: 2px solid #003366; padding-bottom: 8px; margin-bottom: 20px;\">🗞️ Rassegna Stampa & Analisi Politica - {data_oggi_str}</h2>\n\n"
+    "  <div style=\"background: #f8f9fa; border-left: 4px solid #003366; padding: 15px 20px; margin-bottom: 20px; border-radius: 0 8px 8px 0;\">\n"
+    "    <h3 style=\"margin-top:0; color: #003366;\">📌 Il Tema Centrale del Giorno</h3>\n"
+    "    <p>[Analisi del fatto politico principale della giornata con focus sulle riforme, l'azione del Governo Meloni e la stabilità del Paese]</p>\n"
+    "  </div>\n\n"
+    "  <div style=\"background: #f8f9fa; border-left: 4px solid #e67e22; padding: 15px 20px; margin-bottom: 20px; border-radius: 0 8px 8px 0;\">\n"
+    "    <h3 style=\"margin-top:0; color: #2c3e50;\">📊 I Punti di Vista della Stampa Nazionale</h3>\n"
+    "    <ul style=\"padding-left: 20px; margin-bottom: 0;\">\n"
+    "      <li style=\"margin-bottom: 8px;\"><strong>Corriere della Sera e La Repubblica:</strong> [Sintesi delle prime pagine e differenze di racconto]</li>\n"
+    "      <li style=\"margin-bottom: 8px;\"><strong>Libero, Il Giornale e La Verità:</strong> [Analisi della stampa conservatrice e difesa delle scelte di governo]</li>\n"
+    "      <li style=\"margin-bottom: 8px;\"><strong>La Stampa e Il Foglio:</strong> [Retroscena istituzionali, dibattito politico ed economia]</li>\n"
+    "      <li style=\"margin-bottom: 8px;\"><strong>Il Sole 24 Ore:</strong> [Mercati, dati di bilancio, crescita e imprese]</li>\n"
+    "    </ul>\n"
+    "  </div>\n\n"
+    "  <div style=\"background: #f0f4f8; border-left: 4px solid #2980b9; padding: 15px 20px; margin-bottom: 20px; border-radius: 0 8px 8px 0;\">\n"
+    "    <h3 style=\"margin-top:0; color: #2980b9;\">🌍 Lo Sguardo della Stampa Internazionale</h3>\n"
+    "    <p>[Sintesi su come Financial Times, WSJ, Le Figaro o El País raccontano l'Italia, il ruolo dell'Italia in Europa e la figura di Giorgia Meloni sullo scenario globale]</p>\n"
+    "  </div>\n\n"
+    "  <div style=\"background: #fff8e1; border: 1px solid #ffe082; border-left: 4px solid #f39c12; padding: 18px 20px; font-style: italic; margin-bottom: 25px; border-radius: 0 8px 8px 0;\">\n"
+    "    <h3 style=\"margin-top:0; font-style: normal; color: #d35400;\">💡 Il Commento della Redazione</h3>\n"
+    "    <p>\"[Riflessione politica chiara e incisiva a sostegno del percorso di stabilità e crescita dell'Italia]\"</p>\n"
+    "    <div style=\"text-align: right; font-weight: bold; font-style: normal; color: #7f8c8d; margin-top: 10px;\">— Bruno Rachiele</div>\n"
+    "  </div>\n\n"
+    "  <div style=\"background: #eef9f5; border: 1px solid #c8e6c9; padding: 20px; border-radius: 8px;\">\n"
+    "    <h4 style=\"margin-top:0; color: #2e7d32; font-size: 18px;\">✉️ Spunti per la Newsletter</h4>\n"
+    "    <ol style=\"padding-left: 20px; margin-bottom: 0;\">\n"
+    "      <li style=\"margin-bottom: 8px;\"><strong>Economia e Fisco:</strong> [Sintesi punto 1]</li>\n"
+    "      <li style="margin-bottom: 8px;\"><strong>Politica Estera e UE:</strong> [Sintesi punto 2]</li>\n"
+    "      <li style=\"margin-bottom: 8px;\"><strong>Riforme Strutturali:</strong> [Sintesi punto 3]</li>\n"
+    "    </ol>\n"
+    "  </div>\n"
+    "</div>\n"
+)
 
-Mantieni uno stile autorevole, lucido e professionale, valorizzando la stabilità dell'esecutivo, il pragmatismo delle riforme economiche e la difesa dell'interesse nazionale.
+# 6. Generazione Testo
+print("🧠 Rilevamento modelli disponibili...")
 
-Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <body>) rispettando esattamente questa struttura e stili inline:
+modelli_da_provare = ['gemma-4-26b-a4b-it', 'gemini-3.8-flash', 'gemini-1.5-flash']
+response = None
 
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2c3e50; max-width: 800px; margin: 0 auto; padding: 10px; line-height: 1.6;">
-  <h2 style="color: #1a252f; border-bottom: 2px solid #003366; padding-bottom: 8px; margin-bottom: 20px;">🗞️ Rassegna Stampa & Analisi Politica - {data_oggi_str}</h2>
-  
-  <!-- Tema Centrale -->
-  <div style="background: #f8f9fa; border-left: 4px solid #003366; padding: 15px 20px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
-    <h3 style="margin-top:0; color: #003366;">📌 Il Tema Centrale del Giorno</h3>
-    <p>[Analisi del fatto politico principale della giornata con focus sulle riforme, l'azione del Governo Meloni e la stabilità del Paese]</p>
-  </div>
+for m in modelli_da_provare:
+    try:
+        print(f"🔄 Prova generazione con modello: {m}...")
+        response = client.models.generate_content(
+            model=m,
+            contents=prompt,
+        )
+        if response and response.text:
+            print(f"✅ Generazione completata con: {m}")
+            break
+    except Exception as err:
+        print(f"❌ Errore con {m}: {err}")
 
-  <!-- Punti di Vista Quotidiani Italiani -->
-  <div style="background: #f8f9fa; border-left: 4px solid #e67e22; padding: 15px 20px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
-    <h3 style="margin-top:0; color: #2c3e50;">📊 I Punti di Vista della Stampa
+if not response or not response.text:
+    raise RuntimeError("❌ Impossibile generare il contenuto.")
+
+html_content = response.text
+contenuto_completo = schema_html + header_html + html_content + foto_html
+
+# 7. Invio Email via SMTP
+msg = MIMEMultipart()
+msg['From'] = SENDER_EMAIL
+msg['To'] = BLOGGER_EMAIL
+msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi_str}"
+msg.attach(MIMEText(contenuto_completo, 'html'))
+
+try:
+    print("📧 Connessione al server SMTP di Gmail...")
+    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
+    server.ehlo()
+    server.starttls()
+    server.ehlo()
+    server.login(SENDER_EMAIL.strip(), SENDER_PASSWORD.strip().replace(" ", ""))
+    server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, msg.as_string())
+    server.quit()
+    print("✅ RASSEGNA STAMPA PUBBLICATA CON SUCCESSO SU BLOGGER!")
+except Exception as e:
+    print(f"❌ Errore durante l'invio SMTP: {e}")
+    raise e
