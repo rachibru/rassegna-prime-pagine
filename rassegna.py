@@ -1,4 +1,5 @@
 import os
+import time
 import datetime
 import smtplib
 import requests
@@ -7,7 +8,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
 
-# 1. Recupera le credenziali dai secrets di GitHub
+# 1. Recupera credenciales
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
@@ -16,11 +17,11 @@ SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 if not all([GEMINI_API_KEY, BLOGGER_EMAIL, SENDER_EMAIL, SENDER_PASSWORD]):
     raise ValueError("❌ Uno o più Secrets non sono stati configurati su GitHub!")
 
-# 2. Inizializzazione della data e del client Gemini
+# 2. Setup Data e Client
 data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 3. Scraping delle prime pagine di giornali.it
+# 3. Scraping prime pagine
 def recupera_prime_pagine():
     html_foto = """
     <div style='margin-top: 30px;'>
@@ -50,7 +51,7 @@ def recupera_prime_pagine():
 
 foto_html = recupera_prime_pagine()
 
-# 4. Prompt per generare la struttura HTML desiderata
+# 4. Prompt HTML
 prompt = f"""
 Sei un giornalista politico ed editor-in-chief.
 Elabora un commento e una rassegna sintetica delle prime pagine dei principali quotidiani italiani di oggi ({data_oggi}).
@@ -92,32 +93,33 @@ Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <b
 </div>
 """
 
-# 5. Generazione testo tramite Gemini
+# 5. Generazione testo con Reintentos Automáticos
 print("🧠 Generazione testo in corso...")
 
-# Modelli da tentare in ordine
-modelli_da_provare = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.0-flash']
+modelli_da_provare = ['gemini-3.8-flash', 'gemini-flash-latest']
 response = None
 
 for m in modelli_da_provare:
-    try:
-        print(f"🔄 Tentativo generazione con modello: {m}")
-        response = client.models.generate_content(
-            model=m,
-            contents=prompt,
-        )
-        if response and response.text:
-            print(f"✅ Generazione riuscita con il modello {m}!")
-            break
-    except Exception as e:
-        print(f"⚠️ Errore con {m}: {e}")
+    for intento in range(3):  # 3 reintentos por modelo
+        try:
+            print(f"🔄 Intentando modello {m} (intento {intento + 1}/3)...")
+            response = client.models.generate_content(
+                model=m,
+                contents=prompt,
+            )
+            if response and response.text:
+                print(f"✅ Generazione riuscita con {m}!")
+                break
+        except Exception as e:
+            print(f"⚠️ Errore con {m}: {e}")
+            time.sleep(5)  # Espera 5 segundos si el servidor responde 503
+    if response and response.text:
+        break
 
 if not response or not response.text:
-    raise RuntimeError("❌ Nessun modello Gemini ha risposto con successo.")
+    raise RuntimeError("❌ La API di Google continua occupata. Reintenta tra un paio di minuti.")
 
 html_content = response.text
-
-# Unione del testo generato e delle immagini delle prime pagine
 contenuto_finale = html_content + "<hr style='margin-top: 30px; border: 0; border-top: 1px solid #ccc;'/>" + foto_html
 
 # 6. Invio via SMTP SSL (Porta 465)
