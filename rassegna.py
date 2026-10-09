@@ -92,36 +92,30 @@ Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <b
 </div>
 """
 
-# 5. Generazione testo tramite Gemini con fallback dinamico
+# 5. Generazione testo tramite Gemini
 print("🧠 Generazione testo in corso...")
 
-try:
-    response = client.models.generate_content(
-        model='gemini-2.0-flash',
-        contents=prompt,
-    )
-    html_content = response.text
-except Exception as e:
-    print(f"⚠️ Modello predefinito non disponibile ({e}). Ricerca automatica in corso...")
-    
-    modelli_disponibili = []
-    try:
-        for m in client.models.list():
-            if hasattr(m, "supported_generation_methods") and "generateContent" in m.supported_generation_methods:
-                modelli_disponibili.append(m.name)
-            elif hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
-                modelli_disponibili.append(m.name)
-    except Exception as list_err:
-        print(f"Impossibile recuperare l'elenco dei modelli: {list_err}")
+# Modelli da tentare in ordine
+modelli_da_provare = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.0-flash']
+response = None
 
-    modello_scelto = modelli_disponibili[0] if modelli_disponibili else 'gemini-1.5-flash-8b'
-        
-    print(f"🔄 Utilizzo il modello alternativo: {modello_scelto}")
-    response = client.models.generate_content(
-        model=modello_scelto,
-        contents=prompt,
-    )
-    html_content = response.text
+for m in modelli_da_provare:
+    try:
+        print(f"🔄 Tentativo generazione con modello: {m}")
+        response = client.models.generate_content(
+            model=m,
+            contents=prompt,
+        )
+        if response and response.text:
+            print(f"✅ Generazione riuscita con il modello {m}!")
+            break
+    except Exception as e:
+        print(f"⚠️ Errore con {m}: {e}")
+
+if not response or not response.text:
+    raise RuntimeError("❌ Nessun modello Gemini ha risposto con successo.")
+
+html_content = response.text
 
 # Unione del testo generato e delle immagini delle prime pagine
 contenuto_finale = html_content + "<hr style='margin-top: 30px; border: 0; border-top: 1px solid #ccc;'/>" + foto_html
