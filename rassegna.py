@@ -24,13 +24,13 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 IMMAGINE_PRINCIPALE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80"
 
-# 3. Schema.org JSON-LD per Indicizzazione SEO
+# 3. Schema.org JSON-LD per Indicizzazione SEO Avanzata
 schema_json = {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": f"https://brunorachiele.blogspot.com/{data_iso}-rassegna-stampa"
+    "@id": f"https://www.brunorachiele.it/{datetime.datetime.now().strftime('%Y/%m')}/rassegna-stampa-{data_iso}.html"
   },
   "headline": f"Rassegna Stampa & Analisi Politica - {data_oggi_str}",
   "image": [IMMAGINE_PRINCIPALE],
@@ -40,7 +40,7 @@ schema_json = {
     "@type": "Person",
     "name": "Bruno Rachiele",
     "jobTitle": "Editor politico",
-    "url": "https://brunorachiele.blogspot.com"
+    "url": "https://www.brunorachiele.it"
   },
   "publisher": {
     "@type": "Organization",
@@ -61,7 +61,7 @@ header_html = f"""
 </div>
 """
 
-# 4. Prompt Focalizzato sulla Certificazione dei Titoli e dell'Analisi
+# 4. Prompt per la generazione del testo
 prompt = (
     "Sei un autorevole giornalista ed editor politico d'area conservatrice e di centrodestra (vicino alla linea del Governo Meloni).\n"
     f"Elabora un commento analitico e una rassegna sintetica dei titoli e temi effettivamente presenti sulle prime pagine dei quotidiani di oggi ({data_oggi_str}).\n\n"
@@ -103,7 +103,7 @@ prompt = (
     "</div>\n"
 )
 
-# 5. Generazione Testo tramite Fallback
+# 5. Generazione Testo
 print("🧠 Rilevamento modelli disponibili...")
 
 modelli_da_provare = ['gemma-4-26b-a4b-it', 'gemini-3.8-flash', 'gemini-1.5-flash']
@@ -128,11 +128,14 @@ if not response or not response.text:
 html_content = response.text
 contenuto_completo = schema_html + header_html + html_content
 
-# 6. Invio Email via SMTP
+# 6. Invio Email via SMTP con solo il Tag [Rassegna Stampa]
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
-msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi_str}"
+
+# Solo il tag [Rassegna Stampa] per la categorizzazione automatica
+msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi_str} [Rassegna Stampa]"
+
 msg.attach(MIMEText(contenuto_completo, 'html'))
 
 try:
@@ -144,7 +147,7 @@ try:
     server.login(SENDER_EMAIL.strip(), SENDER_PASSWORD.strip().replace(" ", ""))
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, msg.as_string())
     server.quit()
-    print("✅ RASSEGNA STAMPA PUBBLICATA CON SUCCESSO SU BLOGGER!")
+    print("✅ RASSEGNA STAMPA PUBBLICATA CON SUCCESSO SU BLOGGER CON TAG RASSEGNA STAMPA!")
 except Exception as e:
     print(f"❌ Errore durante l'invio SMTP: {e}")
     raise e
