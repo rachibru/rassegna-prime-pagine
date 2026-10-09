@@ -21,35 +21,49 @@ if not all([GEMINI_API_KEY, BLOGGER_EMAIL, SENDER_EMAIL, SENDER_PASSWORD]):
 data_oggi = datetime.datetime.now().strftime("%d/%m/%Y")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 3. Scraping prime pagine
+# Immagine di copertina principale per il post (Unsplash - tema notizie/stampa)
+IMMAGINE_PRINCIPALE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80"
+
+# 3. Scraping prime pagine del giorno
 def recupera_prime_pagine():
     html_foto = """
-    <div style='margin-top: 30px;'>
-      <h3 style='color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;'>📷 Le Prime Pagine di Oggi</h3>
-      <div style='display:flex; flex-wrap:wrap; gap:15px; margin-top: 15px;'>
+    <div style='margin-top: 35px; border-top: 2px solid #eee; padding-top: 20px;'>
+      <h3 style='color: #1a252f; font-size: 20px; margin-bottom: 15px;'>📷 Le Prime Pagine dei Quotidiani di Oggi</h3>
+      <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;'>
     """
     try:
         url = "https://www.giornali.it/prime-pagine/"
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        images = soup.find_all('img', limit=6)
+        images = soup.find_all('img', limit=8)
         found = False
         for img in images:
             src = img.get('src') or img.get('data-src')
             if src and ('jpg' in src or 'png' in src or 'webp' in src):
                 if not src.startswith('http'):
                     src = "https:" + src if src.startswith('//') else url + src
-                html_foto += f"<div style='margin-bottom:15px;'><img src='{src}' style='max-width:100%; height:auto; border:1px solid #ccc; border-radius:5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);' /></div>"
+                html_foto += f"""
+                <div style='text-align: center; background: #fdfdfd; padding: 8px; border: 1px solid #e0e0e0; border-radius: 6px;'>
+                  <img src='{src}' style='max-width: 100%; height: auto; border-radius: 4px;' alt='Prima Pagina' />
+                </div>
+                """
                 found = True
         html_foto += "</div></div>"
         return html_foto if found else ""
     except Exception as e:
-        print(f"⚠️ Errore foto: {e}")
+        print(f"⚠️ Errore scraping foto: {e}")
         return ""
 
 foto_html = recupera_prime_pagine()
+
+# Banner Header con Immagine Principale
+header_html = f"""
+<div style="text-align: center; margin-bottom: 25px;">
+  <img src="{IMMAGINE_PRINCIPALE}" alt="Rassegna Stampa" style="width: 100%; max-height: 350px; object-fit: cover; border-radius: 8px;" />
+</div>
+"""
 
 # 4. Prompt HTML
 prompt = f"""
@@ -93,23 +107,19 @@ Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <b
 </div>
 """
 
-# 5. Generazione testo con Scoperta Dinamica dei Modelli Abilitati
-print("🧠 Rilevamento modelli disponibili sul tuo account...")
+# 5. Generazione testo
+print("🧠 Rilevamento modelli disponibili...")
 
-# Elenco dinamico dei modelli gratuiti attivi sulla tua API Key
 modelli_abilitati = []
 try:
     for m in client.models.list():
         name = m.name.replace("models/", "")
         modelli_abilitati.append(name)
 except Exception as e:
-    print(f"⚠️ Impossibile elencare i modelli automaticamente: {e}")
+    print(f"⚠️ Errore elenco modelli: {e}")
 
-# Se la lista automatica fallisce, proviamo con una lista di default
 if not modelli_abilitati:
-    modelli_abilitati = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
-
-print(f"📋 Modelli rilevati: {modelli_abilitati}")
+    modelli_abilitati = ['gemma-4-26b-a4b-it', 'gemini-3.8-flash', 'gemini-1.5-flash']
 
 response = None
 for m in modelli_abilitati:
@@ -121,7 +131,7 @@ for m in modelli_abilitati:
                 contents=prompt,
             )
             if response and response.text:
-                print(f"✅ Generazione riuscita con il modello: {m}")
+                print(f"✅ Generazione riuscita con: {m}")
                 break
         except Exception as err:
             print(f"❌ Fallito con {m}: {err}")
@@ -130,12 +140,12 @@ for m in modelli_abilitati:
         break
 
 if not response or not response.text:
-    raise RuntimeError("❌ Nessun modello è riuscito a generare il contenuto. Controlla la validità della tua API Key su Google AI Studio.")
+    raise RuntimeError("❌ Nessun modello disponibile.")
 
 html_content = response.text
-contenuto_finale = html_content + "<hr style='margin-top: 30px; border: 0; border-top: 1px solid #ccc;'/>" + foto_html
+contenuto_finale = header_html + html_content + foto_html
 
-# 6. Invio via SMTP (Porta 587 con STARTTLS)
+# 6. Invio via SMTP
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
@@ -143,17 +153,17 @@ msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi}"
 msg.attach(MIMEText(contenuto_finale, 'html'))
 
 try:
-    print("📧 Connessione al server SMTP di Gmail (porta 587)...")
+    print("📧 Connessione SMTP Gmail (porta 587)...")
     server = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
     server.ehlo()
     server.starttls()
     server.ehlo()
-    print("🔑 Autenticazione in corso...")
+    print("🔑 Autenticazione...")
     server.login(SENDER_EMAIL.strip(), SENDER_PASSWORD.strip().replace(" ", ""))
-    print("📤 Invio messaggio...")
+    print("📤 Invio...")
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, msg.as_string())
     server.quit()
     print("✅ RASSEGNA INVIATA E PUBBLICATA CON SUCCESSO!")
 except Exception as e:
-    print(f"❌ Errore durante l'invio della mail: {e}")
+    print(f"❌ Errore durante l'invio: {e}")
     raise e
