@@ -7,7 +7,6 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 TARGET_PAGE_ID = "4213404198440467971"
-RASSEGNA_STAMPA_FEED_URL = "https://www.brunorachiele.it/feeds/posts/default/-/Rassegna%20Stampa?alt=json&max-results=1"
 
 QUOTIDIANI_MAP = [
     {"name": "Corriere della Sera", "url": "https://giornali.it/quotidiani-nazionali/corriere-della-sera/prima-pagina/"},
@@ -27,30 +26,8 @@ QUOTIDIANI_MAP = [
 MESI_ITA = {
     1: "gennaio", 2: "febbraio", 3: "marzo", 4: "aprile",
     5: "maggio", 6: "giugno", 7: "luglio", 8: "agosto",
-    9: "settembre", 10: "ottobre", 11: "novembren", 12: "dicembre"
+    9: "settembre", 10: "ottobre", 11: "novembre", 12: "dicembre"
 }
-
-def get_latest_rassegna_post():
-    """Recupera titolo e URL dell'ultimo post pubblicato sotto l'etichetta Rassegna Stampa."""
-    try:
-        resp = requests.get(RASSEGNA_STAMPA_FEED_URL, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            entries = data.get("feed", {}).get("entry", [])
-            if entries:
-                latest = entries[0]
-                title = latest.get("title", {}).get("$t", "Leggi il commento alle notizie di oggi")
-                links = latest.get("link", [])
-                post_url = "https://www.brunorachiele.it/search/label/Rassegna%20Stampa"
-                for l in links:
-                    if l.get("rel") == "alternate":
-                        post_url = l.get("href")
-                        break
-                return title, post_url
-    except Exception as e:
-        print(f"[-] Errore nel recupero del feed Rassegna Stampa: {e}")
-    
-    return "Leggi il commento alle notizie di oggi", "https://www.brunorachiele.it/search/label/Rassegna%20Stampa"
 
 def fetch_prime_pagine():
     headers = {
@@ -132,13 +109,7 @@ def main():
     today_formatted = f"{today.day} {month_name} {today.year}"
     today_str = today.strftime("%d/%m/%Y")
 
-    # Genera il titolo dinamico per Blogger
     dynamic_page_title = f"#primepagine del {today_formatted}"
-
-    # Recupera l'ultimo post della Rassegna Stampa
-    post_title, post_link = get_latest_rassegna_post()
-    print(f"[+] Ultimo post trovato in Rassegna Stampa: '{post_title}' -> {post_link}")
-
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     schema_data = {
@@ -311,6 +282,7 @@ def main():
       </div>
     </div>"""
 
+    # HTML con script JS dinamico per leggere il post più recente in tempo reale lato client
     final_html = f"""
 <script type="application/ld+json">
 {schema_json}
@@ -325,8 +297,8 @@ def main():
   <!-- Box Promo Commento Ultima Rassegna Stampa -->
   <div class="commento-banner">
     <h2>✍️ Il Commento di Oggi</h2>
-    <p>"{post_title}"</p>
-    <a href="{post_link}" class="commento-btn" target="_blank">
+    <p id="rassegna-post-title">Caricamento dell'ultimo commento in corso...</p>
+    <a href="https://www.brunorachiele.it/search/label/Rassegna%20Stampa" id="rassegna-post-link" class="commento-btn" target="_blank">
       Leggi il commento alle notizie di oggi &rarr;
     </a>
   </div>
@@ -334,7 +306,38 @@ def main():
   <div class="grid-edicola">
     {cards_html}
   </div>
-</div>"""
+</div>
+
+<script>
+  (function() {{
+    var feedUrl = "https://www.brunorachiele.it/feeds/posts/default/-/Rassegna%20Stampa?alt=json&max-results=1";
+    fetch(feedUrl)
+      .then(function(response) {{ return response.json(); }})
+      .then(function(data) {{
+        if (data.feed && data.feed.entry && data.feed.entry.length > 0) {{
+          var entry = data.feed.entry[0];
+          var title = entry.title.$t;
+          var link = "https://www.brunorachiele.it/search/label/Rassegna%20Stampa";
+          if (entry.link) {{
+            for (var i = 0; i < entry.link.length; i++) {{
+              if (entry.link[i].rel === "alternate") {{
+                link = entry.link[i].href;
+                break;
+              }}
+            }}
+          }}
+          var titleElem = document.getElementById("rassegna-post-title");
+          var linkElem = document.getElementById("rassegna-post-link");
+          if (titleElem) titleElem.innerText = '"' + title + '"';
+          if (linkElem) linkElem.href = link;
+        }}
+      }})
+      .catch(function(err) {{
+        console.error("Errore durante il caricamento dinamico della Rassegna Stampa:", err);
+      }});
+  }})();
+</script>
+"""
 
     creds = Credentials(
         token=None,
