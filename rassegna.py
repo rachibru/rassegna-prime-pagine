@@ -12,26 +12,27 @@ from googleapiclient.discovery import build
 DEFAULT_IMAGE_URL = "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80"
 
 def generate_content_with_retry(client, prompt):
-    """Sola ricerca su modelli validi con attesa progressiva in caso di errore 503 (sovraccarico temporaneo)."""
-    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash"]
+    """Esegue la generazione su gemini-3.8-flash gestendo i picchi di traffico temporanei (503)."""
+    model_name = "gemini-3.8-flash"
     
-    for model_name in models_to_try:
-        for attempt in range(1, 4):
-            try:
-                print(f"Generazione in corso con {model_name} (tentativo {attempt})...")
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config={
-                        "response_mime_type": "application/json"
-                    }
-                )
-                return response.text
-            except Exception as e:
-                print(f"Server occupato ({e}). Attesa di {attempt * 5} secondi...")
-                time.sleep(attempt * 5) # Attende 5s al 1° tentativo, 10s al 2°, 15s al 3°
-                
-    raise RuntimeError("I server di Google Gemini sono attualmente sovraccarichi. Riprova tra qualche minuto.")
+    for attempt in range(1, 5):
+        try:
+            print(f"Generazione in corso con {model_name} (tentativo {attempt})...")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config={
+                    "response_mime_type": "application/json"
+                }
+            )
+            return response.text
+        except Exception as e:
+            print(f"Errore durante il tentativo {attempt}: {e}")
+            if attempt < 4:
+                print("Attesa di 5 secondi prima di riprovare...")
+                time.sleep(5)
+            else:
+                raise e
 
 def main():
     # 1. Recupera le credenziali dall'ambiente (GitHub Secrets)
