@@ -6,11 +6,8 @@ from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-PAGE_TITLE = "#primepagine"
 TARGET_PAGE_ID = "4213404198440467971"
-
-# URL dove l'utente legge il tuo commento giornaliero
-URL_COMMENTO_GIORNALIERO = "https://www.brunorachiele.it/"
+RASSEGNA_STAMPA_FEED_URL = "https://www.brunorachiele.it/feeds/posts/default/-/Rassegna%20Stampa?alt=json&max-results=1"
 
 QUOTIDIANI_MAP = [
     {"name": "Corriere della Sera", "url": "https://giornali.it/quotidiani-nazionali/corriere-della-sera/prima-pagina/"},
@@ -26,6 +23,34 @@ QUOTIDIANI_MAP = [
     {"name": "The New York Times", "url": "https://giornali.it/quotidiani-esteri/the-new-york-times/prima-pagina/"},
     {"name": "Financial Times", "url": "https://giornali.it/quotidiani-esteri/financial-times/prima-pagina/"}
 ]
+
+MESI_ITA = {
+    1: "gennaio", 2: "febbraio", 3: "marzo", 4: "aprile",
+    5: "maggio", 6: "giugno", 7: "luglio", 8: "agosto",
+    9: "settembre", 10: "ottobre", 11: "novembren", 12: "dicembre"
+}
+
+def get_latest_rassegna_post():
+    """Recupera titolo e URL dell'ultimo post pubblicato sotto l'etichetta Rassegna Stampa."""
+    try:
+        resp = requests.get(RASSEGNA_STAMPA_FEED_URL, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            entries = data.get("feed", {}).get("entry", [])
+            if entries:
+                latest = entries[0]
+                title = latest.get("title", {}).get("$t", "Leggi il commento alle notizie di oggi")
+                links = latest.get("link", [])
+                post_url = "https://www.brunorachiele.it/search/label/Rassegna%20Stampa"
+                for l in links:
+                    if l.get("rel") == "alternate":
+                        post_url = l.get("href")
+                        break
+                return title, post_url
+    except Exception as e:
+        print(f"[-] Errore nel recupero del feed Rassegna Stampa: {e}")
+    
+    return "Leggi il commento alle notizie di oggi", "https://www.brunorachiele.it/search/label/Rassegna%20Stampa"
 
 def fetch_prime_pagine():
     headers = {
@@ -102,15 +127,25 @@ def main():
         print("Nessuna copertina estratta. Interruzione.")
         return
 
-    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    today_str = datetime.date.today().strftime("%d/%m/%Y")
+    today = datetime.date.today()
+    month_name = MESI_ITA.get(today.month, today.strftime("%B"))
+    today_formatted = f"{today.day} {month_name} {today.year}"
+    today_str = today.strftime("%d/%m/%Y")
 
-    # Schema JSON-LD per indicizzazione SEO su Google
+    # Genera il titolo dinamico per Blogger
+    dynamic_page_title = f"#primepagine del {today_formatted}"
+
+    # Recupera l'ultimo post della Rassegna Stampa
+    post_title, post_link = get_latest_rassegna_post()
+    print(f"[+] Ultimo post trovato in Rassegna Stampa: '{post_title}' -> {post_link}")
+
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
     schema_data = {
         "@context": "https://schema.org",
         "@type": "NewsArticle",
-        "headline": f"Prime Pagine dei Giornali di Oggi - Rassegna Stampa del {today_str}",
-        "description": f"Consulta le prime pagine e copertine dei principali quotidiani italiani ed esteri aggiornate al {today_str}.",
+        "headline": f"Prime Pagine dei Giornali del {today_formatted}",
+        "description": f"Consulta le prime pagine e copertine dei principali quotidiani italiani ed esteri aggiornate al {today_formatted}.",
         "datePublished": now_iso,
         "dateModified": now_iso,
         "mainEntityOfPage": {
@@ -156,7 +191,6 @@ def main():
     margin: 0;
   }
   
-  /* Box promozionale risalto commento */
   .commento-banner {
     background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
     color: #ffffff;
@@ -180,9 +214,10 @@ def main():
   }
   .commento-banner p {
     margin: 0;
-    font-size: 0.98rem;
+    font-size: 1rem;
     color: #e0f2fe;
-    max-width: 650px;
+    max-width: 750px;
+    font-weight: 600;
   }
   .commento-btn {
     display: inline-flex;
@@ -287,11 +322,11 @@ def main():
     <p>Edicola Digitale - Ultimo aggiornamento: <strong>{today_str}</strong></p>
   </div>
 
-  <!-- Box Promo Commento Giornaliero -->
+  <!-- Box Promo Commento Ultima Rassegna Stampa -->
   <div class="commento-banner">
     <h2>✍️ Il Commento di Oggi</h2>
-    <p>Scopri l'analisi approfondita sui temi principali della rassegna stampa odierna.</p>
-    <a href="{URL_COMMENTO_GIORNALIERO}" class="commento-btn">
+    <p>"{post_title}"</p>
+    <a href="{post_link}" class="commento-btn" target="_blank">
       Leggi il commento alle notizie di oggi &rarr;
     </a>
   </div>
@@ -314,11 +349,11 @@ def main():
 
     body_page = {
         "id": TARGET_PAGE_ID,
-        "title": PAGE_TITLE,
+        "title": dynamic_page_title,
         "content": final_html
     }
 
-    print(f"Invio aggiornamento alla pagina ID {TARGET_PAGE_ID} su Blogger...")
+    print(f"Invio aggiornamento a Blogger (Titolo: '{dynamic_page_title}', ID: {TARGET_PAGE_ID})...")
     updated_page = blogger_service.pages().update(
         blogId=blog_id,
         pageId=TARGET_PAGE_ID,
@@ -326,7 +361,7 @@ def main():
         publish=True
     ).execute()
     
-    print(f"[SUCCESS] Pagina aggiornata e indicizzata con successo! Link: {updated_page.get('url')}")
+    print(f"[SUCCESS] Pagina aggiornata e pubblicata! Link: {updated_page.get('url')}")
 
 if __name__ == "__main__":
     main()
