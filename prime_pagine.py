@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-# Titolo esatto della tua pagina su Blogger e ID fisso
 PAGE_TITLE = "#primepagine"
 TARGET_PAGE_ID = "4213404198440467971"
 
@@ -27,48 +26,82 @@ QUOTIDIANI_MAP = [
 ]
 
 def fetch_prime_pagine():
+    # Intestazioni complete per simularne l'apertura da un vero browser Chrome
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.giornalone.it/",
+        "Sec-Ch-Ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin"
     }
 
     papers = []
+    session = requests.Session()
 
     for item in QUOTIDIANI_MAP:
         name = item["name"]
         page_url = item["url"]
         
         try:
-            response = requests.get(page_url, headers=headers, timeout=12)
+            print(f"Scraping per: {name}...")
+            response = session.get(page_url, headers=headers, timeout=15)
             if response.status_code != 200:
+                print(f"[-] Errore HTTP {response.status_code} su {name}")
                 continue
 
             soup = BeautifulSoup(response.text, "html.parser")
             
-            img_tag = soup.find("img", id=lambda x: x and "copertina" in x.lower()) or \
-                      soup.find("img", class_=lambda x: x and "copertina" in x.lower()) or \
-                      soup.find("img", alt=lambda x: x and "prima pagina" in x.lower())
+            # Cerca l'immagine nei contenitori principali della pagina
+            img_tag = None
+            
+            # 1. Cerca tag img con attributi specifici
+            for img in soup.find_all("img"):
+                src = img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
+                alt = img.get("alt") or ""
+                img_id = img.get("id") or ""
+                img_cls = " ".join(img.get("class") or [])
 
+                if any(k in img_id.lower() or k in img_cls.lower() or k in alt.lower() for k in ["copertina", "prima pagina", "frontpage"]):
+                    img_tag = img
+                    break
+
+            # 2. Se non la trova, prende la prima immagine dentro la zona contenuto
             if not img_tag:
-                main_div = soup.find("div", class_="entry-content") or soup.find("article")
-                if main_div:
-                    img_tag = main_div.find("img")
+                main_area = soup.find("main") or soup.find("article") or soup.find("div", class_=lambda x: x and "content" in x.lower())
+                if main_area:
+                    for img in main_area.find_all("img"):
+                        src = img.get("src") or img.get("data-src") or ""
+                        if any(ext in src.lower() for ext in [".jpg", ".png", ".webp", ".jpeg"]):
+                            if "logo" not in src.lower() and "icon" not in src.lower():
+                                img_tag = img
+                                break
 
             if img_tag:
-                src = img_tag.get("src") or img_tag.get("data-src") or ""
+                src = img_tag.get("src") or img_tag.get("data-src") or img_tag.get("data-lazy-src") or ""
                 
                 if src.startswith("//"):
                     src = "https:" + src
                 elif src.startswith("/"):
                     src = "https://www.giornalone.it" + src
 
-                if src and ("jpg" in src.lower() or "png" in src.lower() or "webp" in src.lower()):
+                if src and any(ext in src.lower() for ext in [".jpg", ".png", ".webp", ".jpeg"]):
                     papers.append({
                         "title": name,
                         "image_url": src
                     })
+                    print(f"[+] Estratto con successo: {name}")
+                else:
+                    print(f"[-] URL immagine non valido per {name}: {src}")
+            else:
+                print(f"[-] Nessun tag immagine individuato per {name}")
 
         except Exception as e:
-            print(f"Errore su {name}: {e}")
+            print(f"[-] Eccezione su {name}: {e}")
 
     return papers
 
@@ -78,12 +111,13 @@ def main():
     client_secret = os.environ.get("BLOGGER_CLIENT_SECRET")
     refresh_token = os.environ.get("BLOGGER_REFRESH_TOKEN")
 
-    if not all([blog_id, client_id, client_secret, refresh_token]):
-        raise ValueError("Tutti i Secret di Blogger devono essere configurati su GitHub.")
-
     papers = fetch_prime_pagine()
+    print(f"\n==========================================")
+    print(f"TOTALE COPERTINE ESTRATTE: {len(papers)}/{len(QUOTIDIANI_MAP)}")
+    print(f"==========================================")
+
     if not papers:
-        print("Nessuna prima pagina estratta. Interruzione.")
+        print("Nessuna copertina estratta. Impossibile aggiornare la pagina.")
         return
 
     today_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -210,7 +244,7 @@ def main():
         "content": final_html
     }
 
-    print(f"Aggiornamento e pubblicazione della pagina '{PAGE_TITLE}' (ID: {TARGET_PAGE_ID})...")
+    print(f"Invio aggiornamento alla pagina ID {TARGET_PAGE_ID} su Blogger...")
     updated_page = blogger_service.pages().update(
         blogId=blog_id,
         pageId=TARGET_PAGE_ID,
@@ -218,7 +252,7 @@ def main():
         publish=True
     ).execute()
     
-    print(f"Pagina aggiornata e pubblicata con successo! URL: {updated_page.get('url')}")
+    print(f"[SUCCESS] Pagina aggiornata e pubblicata! Link: {updated_page.get('url')}")
 
 if __name__ == "__main__":
     main()
