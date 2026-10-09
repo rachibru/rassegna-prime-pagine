@@ -8,47 +8,28 @@ from googleapiclient.discovery import build
 PAGE_TITLE = "#primepagine"
 TARGET_PAGE_ID = "4213404198440467971"
 
+# Mappatura su giornali.it
 QUOTIDIANI_MAP = [
-    {"name": "Corriere della Sera", "url": "https://www.giornalone.it/prima-pagina-corriere-della-sera/"},
-    {"name": "La Repubblica", "url": "https://www.giornalone.it/prima-pagina-la-repubblica/"},
-    {"name": "La Stampa", "url": "https://www.giornalone.it/prima-pagina-la-stampa/"},
-    {"name": "Il Giornale", "url": "https://www.giornalone.it/prima-pagina-il-giornale/"},
-    {"name": "Il Tempo", "url": "https://www.giornalone.it/prima-pagina-il-tempo/"},
-    {"name": "Libero", "url": "https://www.giornalone.it/prima-pagina-libero/"},
-    {"name": "Avvenire", "url": "https://www.giornalone.it/prima-pagina-avvenire/"},
-    {"name": "Secolo d'Italia", "url": "https://www.giornalone.it/prima-pagina-secolo-d-italia/"},
-    {"name": "Metro", "url": "https://www.giornalone.it/prima-pagina-metro-today/"},
-    {"name": "Il Sole 24 Ore", "url": "https://www.giornalone.it/prima-pagina-il-sole-24-ore/"},
-    {"name": "L'Osservatore Romano", "url": "https://www.giornalone.it/prima-pagina-l-osservatore-romano/"},
-    {"name": "Corriere del Ticino", "url": "https://www.giornalone.it/prima-pagina-corriere-del-ticino/"},
-    {"name": "The New York Times", "url": "https://www.giornalone.it/prima-pagina-the-new-york-times/"},
-    {"name": "Le Figaro", "url": "https://www.giornalone.it/prima-pagina-le-figaro/"}
+    {"name": "Corriere della Sera", "url": "https://giornali.it/quotidiani-nazionali/corriere-della-sera/prima-pagina/"},
+    {"name": "La Repubblica", "url": "https://giornali.it/quotidiani-nazionali/la-repubblica/prima-pagina/"},
+    {"name": "La Stampa", "url": "https://giornali.it/quotidiani-nazionali/la-stampa/prima-pagina/"},
+    {"name": "Il Giornale", "url": "https://giornali.it/quotidiani-nazionali/il-giornale/prima-pagina/"},
+    {"name": "Il Tempo", "url": "https://giornali.it/quotidiani-nazionali/il-tempo/prima-pagina/"},
+    {"name": "Libero", "url": "https://giornali.it/quotidiani-nazionali/libero/prima-pagina/"},
+    {"name": "Avvenire", "url": "https://giornali.it/quotidiani-nazionali/avvenire/prima-pagina/"},
+    {"name": "Secolo d'Italia", "url": "https://giornali.it/quotidiani-nazionali/secolo-d-italia/prima-pagina/"},
+    {"name": "Metro", "url": "https://giornali.it/quotidiani-nazionali/metro/prima-pagina/"},
+    {"name": "Il Sole 24 Ore", "url": "https://giornali.it/quotidiani-nazionali/il-sole-24-ore/prima-pagina/"},
+    {"name": "L'Osservatore Romano", "url": "https://giornali.it/quotidiani-nazionali/losservatore-romano/prima-pagina/"},
+    {"name": "Corriere del Ticino", "url": "https://giornali.it/quotidiani-esteri/corriere-del-ticino/prima-pagina/"},
+    {"name": "The New York Times", "url": "https://giornali.it/quotidiani-esteri/the-new-york-times/prima-pagina/"},
+    {"name": "Le Figaro", "url": "https://giornali.it/quotidiani-esteri/le-figaro/prima-pagina/"}
 ]
-
-def extract_src(img_tag):
-    if not img_tag:
-        return None
-    
-    # 1. Prova a prendere l'immagine ad alta risoluzione da srcset
-    srcset = img_tag.get("srcset") or img_tag.get("data-srcset") or ""
-    if srcset:
-        parts = [p.strip().split(" ")[0] for p in srcset.split(",") if p.strip()]
-        if parts:
-            return parts[-1]
-
-    # 2. Prova attributi standard
-    for attr in ["data-src", "data-lazy-src", "src", "data-original"]:
-        val = img_tag.get(attr)
-        if val and not val.startswith("data:image"):
-            return val
-            
-    return None
 
 def fetch_prime_pagine():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Referer": "https://www.giornalone.it/"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     }
 
     papers = []
@@ -59,55 +40,50 @@ def fetch_prime_pagine():
         page_url = item["url"]
         
         try:
-            print(f"Scraping mirato per: {name}...")
-            response = session.get(page_url, headers=headers, timeout=15)
+            print(f"Scraping da giornali.it per: {name}...")
+            response = session.get(page_url, headers=headers, timeout=12)
             if response.status_code != 200:
-                print(f"[-] Errore HTTP {response.status_code} su {name}")
+                print(f"[-] HTTP {response.status_code} su {name}")
                 continue
 
             soup = BeautifulSoup(response.text, "html.parser")
             img_src = None
 
-            # Isola il corpo dell'articolo principale
-            article = soup.find("div", class_=lambda x: x and "entry-content" in x.lower()) or soup.find("article")
+            # Cerca il tag img della copertina
+            img_tag = soup.find("img", class_=lambda x: x and "cover" in x.lower()) or \
+                      soup.find("img", id=lambda x: x and "cover" in x.lower()) or \
+                      soup.find("img", alt=lambda x: x and "prima pagina" in x.lower())
 
-            if article:
-                # Cerca l'immagine della copertina identificata con l'attributo o la prima immagine dell'articolo
-                for img in article.find_all("img"):
-                    src_candidate = extract_src(img)
-                    if not src_candidate:
-                        continue
-                    
-                    src_lower = src_candidate.lower()
-                    alt_lower = (img.get("alt") or "").lower()
-
-                    # Ignora loghi, banner, avatar e widget
-                    if any(bad in src_lower for bad in ["logo", "icon", "banner", "avatar", "widget", "venerdi", "sport"]):
-                        continue
-
-                    # Se trova l'immagine contenuta negli uploads di WordPress del post
-                    if "wp-content/uploads" in src_lower or "copertina" in alt_lower or "prima pagina" in alt_lower:
-                        img_src = src_candidate
-                        break
+            if img_tag:
+                img_src = img_tag.get("src") or img_tag.get("data-src") or img_tag.get("data-lazy-src")
+            else:
+                # Fallback: cerca l'immagine dentro il div dell'articolo principale
+                main_div = soup.find("div", class_=lambda x: x and ("content" in x.lower() or "entry" in x.lower())) or soup.find("article")
+                if main_div:
+                    for img in main_div.find_all("img"):
+                        src = img.get("src") or img.get("data-src") or ""
+                        if any(ext in src.lower() for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+                            if "logo" not in src.lower() and "icon" not in src.lower() and "banner" not in src.lower():
+                                img_src = src
+                                break
 
             if img_src:
                 img_src = img_src.split("?")[0]
-
                 if img_src.startswith("//"):
                     img_src = "https:" + img_src
                 elif img_src.startswith("/"):
-                    img_src = "https://www.giornalone.it" + img_src
+                    img_src = "https://giornali.it" + img_src
 
                 papers.append({
                     "title": name,
                     "image_url": img_src
                 })
-                print(f"[+] Estratta correttamente copertina per: {name}")
+                print(f"[+] Estratta con successo copertina di: {name}")
             else:
                 print(f"[-] Copertina non trovata per: {name}")
 
         except Exception as e:
-            print(f"[-] Errore su {name}: {e}")
+            print(f"[-] Errore durante l'estrazione di {name}: {e}")
 
     return papers
 
@@ -123,7 +99,7 @@ def main():
     print(f"==========================================")
 
     if not papers:
-        print("Nessuna copertina estratta. Impossibile aggiornare la pagina.")
+        print("Nessuna copertina estratta. Interruzione.")
         return
 
     today_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -250,10 +226,3 @@ def main():
         blogId=blog_id,
         pageId=TARGET_PAGE_ID,
         body=body_page,
-        publish=True
-    ).execute()
-    
-    print(f"[SUCCESS] Pagina aggiornata! Link: {updated_page.get('url')}")
-
-if __name__ == "__main__":
-    main()
