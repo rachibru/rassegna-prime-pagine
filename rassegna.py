@@ -8,7 +8,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
 
-# 1. Recupera credenciales
+# 1. Credenziali
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 BLOGGER_EMAIL = os.environ.get("BLOGGER_EMAIL")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
@@ -46,7 +46,7 @@ def recupera_prime_pagine():
         html_foto += "</div></div>"
         return html_foto if found else ""
     except Exception as e:
-        print(f"⚠️ Errore durante lo scraping delle foto: {e}")
+        print(f"⚠️ Errore foto: {e}")
         return ""
 
 foto_html = recupera_prime_pagine()
@@ -93,31 +93,44 @@ Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <b
 </div>
 """
 
-# 5. Generazione testo con Reintentos Automáticos
-print("🧠 Generazione testo in corso...")
+# 5. Generazione testo con Scoperta Dinamica dei Modelli Abilitati
+print("🧠 Rilevamento modelli disponibili sul tuo account...")
 
-modelli_da_provare = ['gemini-3.8-flash', 'gemini-flash-latest']
+# Elenco dinamico dei modelli gratuiti attivi sulla tua API Key
+modelli_abilitati = []
+try:
+    for m in client.models.list():
+        name = m.name.replace("models/", "")
+        modelli_abilitati.append(name)
+except Exception as e:
+    print(f"⚠️ Impossibile elencare i modelli automaticamente: {e}")
+
+# Se la lista automatica fallisce, proviamo con una lista di default
+if not modelli_abilitati:
+    modelli_abilitati = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
+
+print(f"📋 Modelli rilevati: {modelli_abilitati}")
+
 response = None
-
-for m in modelli_da_provare:
-    for intento in range(3):  # 3 reintentos por modelo
+for m in modelli_abilitati:
+    for tentativo in range(2):
         try:
-            print(f"🔄 Intentando modello {m} (intento {intento + 1}/3)...")
+            print(f"🔄 Prova con il modello: {m} (tentativo {tentativo + 1})...")
             response = client.models.generate_content(
                 model=m,
                 contents=prompt,
             )
             if response and response.text:
-                print(f"✅ Generazione riuscita con {m}!")
+                print(f"✅ Generazione riuscita con il modello: {m}")
                 break
-        except Exception as e:
-            print(f"⚠️ Errore con {m}: {e}")
-            time.sleep(5)  # Espera 5 segundos si el servidor responde 503
+        except Exception as err:
+            print(f"❌ Fallito con {m}: {err}")
+            time.sleep(3)
     if response and response.text:
         break
 
 if not response or not response.text:
-    raise RuntimeError("❌ La API di Google continua occupata. Reintenta tra un paio di minuti.")
+    raise RuntimeError("❌ Nessun modello è riuscito a generare il contenuto. Controlla la validità della tua API Key su Google AI Studio.")
 
 html_content = response.text
 contenuto_finale = html_content + "<hr style='margin-top: 30px; border: 0; border-top: 1px solid #ccc;'/>" + foto_html
@@ -135,7 +148,7 @@ try:
     server.login(SENDER_EMAIL, SENDER_PASSWORD)
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
     server.quit()
-    print("✅ Rassegna inviata con successo!")
+    print("✅ RASSEGNA INVIATA E PUBBLICATA CON SUCCESSO!")
 except Exception as e:
     print(f"❌ Errore durante l'invio della mail: {e}")
     raise e
