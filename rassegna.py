@@ -28,7 +28,6 @@ giorno = ora_attuale.strftime("%d")
 mese = mesi_ita[ora_attuale.month]
 anno = ora_attuale.strftime("%Y")
 
-# Stringa per il titolo (es. "09 ottobre 2026")
 data_estesa_str = f"{giorno} {mese} {anno}"
 data_oggi_str = ora_attuale.strftime("%d/%m/%Y")
 data_iso = ora_attuale.strftime("%Y-%m-%d")
@@ -140,16 +139,16 @@ if not response or not response.text:
 
 html_content = response.text
 
-# Inserimento della tag [rassegnastampa] in cima al corpo HTML per l'assegnazione automatica della Categoria su Blogger
-tag_categoria = "<p>[rassegnastampa]</p>\n"
-contenuto_completo = schema_html + tag_categoria + header_html + html_content
+# La tag [Rassegna Stampa] è posizionata in CIMA ASSOLUTA al corpo della mail senza tag HTML di contorno
+# In questo modo Blogger la riconosce come comando di categoria e la elimina dal testo visibile
+contenuto_completo = f"[Rassegna Stampa]\n{schema_html}\n{header_html}\n{html_content}"
 
 # 6. Invio Email via SMTP
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
 
-# Titolo pulito con data estesa in italiano
+# Titolo dell'articolo
 msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_estesa_str}"
 
 msg.attach(MIMEText(contenuto_completo, 'html'))
