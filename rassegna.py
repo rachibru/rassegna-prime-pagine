@@ -11,14 +11,14 @@ from googleapiclient.discovery import build
 # ==============================================================================
 DEFAULT_IMAGE_URL = "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80"
 
-def generate_content_with_fallback(client, prompt):
-    """Prova a generare il contenuto gestendo eventuali errori 503 temporanei dei server Google."""
-    models_to_try = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+def generate_content_with_retry(client, prompt):
+    """Sola ricerca su modelli validi con attesa progressiva in caso di errore 503 (sovraccarico temporaneo)."""
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash"]
     
     for model_name in models_to_try:
-        for attempt in range(3): # Effettua fino a 3 tentativi per modello
+        for attempt in range(1, 4):
             try:
-                print(f"Tentativo di generazione con il modello {model_name} (tentativo {attempt + 1})...")
+                print(f"Generazione in corso con {model_name} (tentativo {attempt})...")
                 response = client.models.generate_content(
                     model=model_name,
                     contents=prompt,
@@ -28,10 +28,10 @@ def generate_content_with_fallback(client, prompt):
                 )
                 return response.text
             except Exception as e:
-                print(f"Errore temporaneo con {model_name}: {e}")
-                time.sleep(5) # Attendi 5 secondi prima di riprovare
+                print(f"Server occupato ({e}). Attesa di {attempt * 5} secondi...")
+                time.sleep(attempt * 5) # Attende 5s al 1° tentativo, 10s al 2°, 15s al 3°
                 
-    raise RuntimeError("Tutti i tentativi di generazione con i modelli Gemini sono falliti per sovraccarico dei server.")
+    raise RuntimeError("I server di Google Gemini sono attualmente sovraccarichi. Riprova tra qualche minuto.")
 
 def main():
     # 1. Recupera le credenziali dall'ambiente (GitHub Secrets)
@@ -44,7 +44,7 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
-    # 2. Inizializza il client Gemini per la generazione dell'articolo
+    # 2. Inizializza il client Gemini
     gemini_client = genai.Client(api_key=gemini_api_key)
     
     today_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -67,13 +67,13 @@ def main():
     }}
     """
 
-    response_text = generate_content_with_fallback(gemini_client, prompt)
+    response_text = generate_content_with_retry(gemini_client, prompt)
 
     data = json.loads(response_text)
     post_title = data.get("title")
     article_html = data.get("content")
 
-    # Inserimento dell'immagine scelta in cima all'articolo
+    # Inserimento dell'immagine in testa all'articolo
     header_img_tag = f'<div style="text-align: center; margin-bottom: 20px;"><img src="{DEFAULT_IMAGE_URL}" alt="{post_title}" style="max-width: 100%; height: auto; border-radius: 8px;" /></div>\n'
     full_content_html = header_img_tag + article_html
 
@@ -149,7 +149,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Post aggiornato con successo!")
+    print("Post completato e aggiornato con successo!")
 
 if __name__ == "__main__":
     main()
