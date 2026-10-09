@@ -51,8 +51,8 @@ schema_json = {
   "author": {
     "@type": "Person",
     "name": "Bruno Rachiele",
-    "jobTitle": "Editor politico",
-    "url": "https://www.brunorachiele.it"
+    "jobTitle": "Attivista Politico",
+    "url": "https://www.bio.brunorachiele.it"
   },
   "publisher": {
     "@type": "Organization",
@@ -100,12 +100,12 @@ prompt = (
     "    <p>[Sintesi di come Financial Times, WSJ, Le Figaro o El País raccontano l'Italia, il ruolo dell'Italia in Europa e la figura di Giorgia Meloni sullo scenario globale]</p>\n"
     "  </div>\n\n"
     "  <div style=\"background: #fff8e1; border: 1px solid #ffe082; border-left: 4px solid #f39c12; padding: 18px 20px; font-style: italic; margin-bottom: 25px; border-radius: 0 8px 8px 0;\">\n"
-    "    <h3 style=\"margin-top:0; font-style: normal; color: #d35400;\">💡 Il Commento della Redazione</h3>\n"
+    "    <h3 style=\"margin-top:0; font-style: normal; color: #d35400;\">💡 Il commento</h3>\n"
     "    <p>\"[Riflessione politica chiara e incisiva a sostegno del percorso di stabilità e crescita dell'Italia]\"</p>\n"
     "    <div style=\"text-align: right; font-weight: bold; font-style: normal; color: #7f8c8d; margin-top: 10px;\">— Bruno Rachiele</div>\n"
     "  </div>\n\n"
     "  <div style=\"background: #eef9f5; border: 1px solid #c8e6c9; padding: 20px; border-radius: 8px;\">\n"
-    "    <h4 style=\"margin-top:0; color: #2e7d32; font-size: 18px;\">✉️ Spunti per la Newsletter</h4>\n"
+    "    <h4 style=\"margin-top:0; color: #2e7d32; font-size: 18px;\">✉️ Spunti per i lettori</h4>\n"
     "    <ol style=\"padding-left: 20px; margin-bottom: 0;\">\n"
     "      <li style=\"margin-bottom: 8px;\"><strong>Economia e Fisco:</strong> [Sintesi punto 1]</li>\n"
     "      <li style=\"margin-bottom: 8px;\"><strong>Politica Estera e UE:</strong> [Sintesi punto 2]</li>\n"
