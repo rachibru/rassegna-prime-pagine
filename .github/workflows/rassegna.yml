@@ -1,12 +1,13 @@
-name: Automazione Rassegna Stampa
+name: Rassegna Stampa Automatica
 
 on:
   schedule:
+    # Esegue ogni giorno alle 04:00 UTC (ovvero le 06:00 ora italiana CEST)
     - cron: '0 4 * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Mantiene la possibilità di avviarlo manualmente quando vuoi
 
 jobs:
-  run-rassegna:
+  run-script:
     runs-on: ubuntu-latest
     steps:
       - name: Scarica repository
@@ -17,8 +18,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Installa pacchetti
-        run: pip install google-genai requests beautifulsoup4
+      - name: Installa dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-genai requests beautifulsoup4
 
       - name: Esegui script
         env:
