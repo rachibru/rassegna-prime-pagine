@@ -135,7 +135,7 @@ if not response or not response.text:
 html_content = response.text
 contenuto_finale = html_content + "<hr style='margin-top: 30px; border: 0; border-top: 1px solid #ccc;'/>" + foto_html
 
-# 6. Invio via SMTP SSL (Porta 465)
+# 6. Invio via SMTP (Porta 587 con STARTTLS)
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
@@ -143,9 +143,14 @@ msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi}"
 msg.attach(MIMEText(contenuto_finale, 'html'))
 
 try:
-    print("📧 Invio email a Blogger tramite SSL (porta 465)...")
-    server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-    server.login(SENDER_EMAIL, SENDER_PASSWORD)
+    print("📧 Connessione al server SMTP di Gmail (porta 587)...")
+    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
+    server.ehlo()
+    server.starttls()
+    server.ehlo()
+    print("🔑 Autenticazione in corso...")
+    server.login(SENDER_EMAIL.strip(), SENDER_PASSWORD.strip().replace(" ", ""))
+    print("📤 Invio messaggio...")
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
     server.quit()
     print("✅ RASSEGNA INVIATA E PUBBLICATA CON SUCCESSO!")
