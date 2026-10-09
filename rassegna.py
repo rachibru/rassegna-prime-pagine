@@ -7,7 +7,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 # Immagine di copertina personalizzata
-HEADER_IMAGE_URL = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjq3FXgvCfB7U1IhNZqrVmya6z-SKVDZtDCTcAsGD_lnNK-cB9ULPamEQidtUtHkqFbPPQa0MeYZTRV8A7hf5ZQc3Ypx1bSBl730QKQgDvUOa1_m05p0DCa7OuHchRWleVms_oBzSOUPX2jTSQ9u-dsWdXuwUalpoE_7Ae5KmzDvVjbnkLFv8QaF8YvYyk/s1600/NUOVE%20GRAFICHE%20SITO%20%281%29.png"
+HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
 def get_gemini_content(client, prompt, sys_instruction):
     """Richiesta leggera a Gemini con meccanismo di retry."""
