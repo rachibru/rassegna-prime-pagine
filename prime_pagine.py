@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-PAGE_TITLE = "Prime Pagine dei Giornali"
+PAGE_TITLE = "#primepagine"
 # Impostiamo l'ID esatto della tua pagina su Blogger
 TARGET_PAGE_ID = "4213404198440467971"
 
