@@ -1,4 +1,5 @@
 import os
+import re
 import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -25,19 +26,31 @@ QUOTIDIANI_MAP = [
     {"name": "Le Figaro", "url": "https://www.giornalone.it/prima-pagina-le-figaro/"}
 ]
 
+def extract_image_url(img_tag):
+    """Estrae il miglior URL dell'immagine valutando vari attributi."""
+    if not img_tag:
+        return None
+
+    # Controlla srcset se presente (spesso contiene l'immagine ad alta risoluzione)
+    srcset = img_tag.get("srcset") or img_tag.get("data-srcset") or ""
+    if srcset:
+        urls = [item.strip().split(" ")[0] for item in srcset.split(",") if item.strip()]
+        if urls:
+            return urls[-1] # Prende l'ultima (di solito la risoluzione più alta)
+
+    # Controlla attributi standard
+    for attr in ["data-src", "data-lazy-src", "src", "data-original"]:
+        val = img_tag.get(attr)
+        if val and not val.startswith("data:image"):
+            return val
+
+    return None
+
 def fetch_prime_pagine():
-    # Intestazioni complete per simularne l'apertura da un vero browser Chrome
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.giornalone.it/",
-        "Sec-Ch-Ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer": "https://www.giornalone.it/"
     }
 
     papers = []
@@ -55,50 +68,41 @@ def fetch_prime_pagine():
                 continue
 
             soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Cerca l'immagine nei contenitori principali della pagina
-            img_tag = None
-            
-            # 1. Cerca tag img con attributi specifici
-            for img in soup.find_all("img"):
-                src = img.get("src") or img.get("data-src") or img.get("data-lazy-src") or ""
-                alt = img.get("alt") or ""
-                img_id = img.get("id") or ""
-                img_cls = " ".join(img.get("class") or [])
+            img_src = None
 
-                if any(k in img_id.lower() or k in img_cls.lower() or k in alt.lower() for k in ["copertina", "prima pagina", "frontpage"]):
-                    img_tag = img
-                    break
+            # 1. Cerca l'immagine principale con id o classe 'copertina'
+            target_img = soup.find("img", id=lambda x: x and "copertina" in x.lower()) or \
+                         soup.find("img", class_=lambda x: x and "copertina" in x.lower()) or \
+                         soup.find("img", alt=lambda x: x and "prima pagina" in x.lower())
 
-            # 2. Se non la trova, prende la prima immagine dentro la zona contenuto
-            if not img_tag:
-                main_area = soup.find("main") or soup.find("article") or soup.find("div", class_=lambda x: x and "content" in x.lower())
-                if main_area:
-                    for img in main_area.find_all("img"):
-                        src = img.get("src") or img.get("data-src") or ""
-                        if any(ext in src.lower() for ext in [".jpg", ".png", ".webp", ".jpeg"]):
-                            if "logo" not in src.lower() and "icon" not in src.lower():
-                                img_tag = img
-                                break
+            img_src = extract_image_url(target_img)
 
-            if img_tag:
-                src = img_tag.get("src") or img_tag.get("data-src") or img_tag.get("data-lazy-src") or ""
-                
-                if src.startswith("//"):
-                    src = "https:" + src
-                elif src.startswith("/"):
-                    src = "https://www.giornalone.it" + src
+            # 2. Fallback: Cerca dentro l'articolo principale
+            if not img_src:
+                article = soup.find("article") or soup.find("main") or soup.find("div", class_=lambda x: x and "content" in x.lower())
+                if article:
+                    for img in article.find_all("img"):
+                        candidate = extract_image_url(img)
+                        if candidate and "logo" not in candidate.lower() and "icon" not in candidate.lower():
+                            img_src = candidate
+                            break
 
-                if src and any(ext in src.lower() for ext in [".jpg", ".png", ".webp", ".jpeg"]):
-                    papers.append({
-                        "title": name,
-                        "image_url": src
-                    })
-                    print(f"[+] Estratto con successo: {name}")
-                else:
-                    print(f"[-] URL immagine non valido per {name}: {src}")
+            if img_src:
+                # Pulisce parametri di query se presenti
+                img_src = img_src.split("?")[0]
+
+                if img_src.startswith("//"):
+                    img_src = "https:" + img_src
+                elif img_src.startswith("/"):
+                    img_src = "https://www.giornalone.it" + img_src
+
+                papers.append({
+                    "title": name,
+                    "image_url": img_src
+                })
+                print(f"[+] Estratto con successo {name}: {img_src}")
             else:
-                print(f"[-] Nessun tag immagine individuato per {name}")
+                print(f"[-] Immagine non individuata per {name}")
 
         except Exception as e:
             print(f"[-] Eccezione su {name}: {e}")
