@@ -1,4 +1,5 @@
 import os
+import json
 import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -8,7 +9,9 @@ from googleapiclient.discovery import build
 PAGE_TITLE = "#primepagine"
 TARGET_PAGE_ID = "4213404198440467971"
 
-# Mappatura con gli URL esatti forniti dall'utente
+# URL dove l'utente legge il tuo commento giornaliero
+URL_COMMENTO_GIORNALIERO = "https://www.brunorachiele.it/"
+
 QUOTIDIANI_MAP = [
     {"name": "Corriere della Sera", "url": "https://giornali.it/quotidiani-nazionali/corriere-della-sera/prima-pagina/"},
     {"name": "La Repubblica", "url": "https://giornali.it/quotidiani-nazionali/la-repubblica/prima-pagina/"},
@@ -48,7 +51,6 @@ def fetch_prime_pagine():
             soup = BeautifulSoup(response.text, "html.parser")
             img_src = None
 
-            # Estrazione immagine di copertina
             img_tag = soup.find("img", class_=lambda x: x and "cover" in x.lower()) or \
                       soup.find("img", id=lambda x: x and "cover" in x.lower()) or \
                       soup.find("img", alt=lambda x: x and "prima pagina" in x.lower())
@@ -100,7 +102,38 @@ def main():
         print("Nessuna copertina estratta. Interruzione.")
         return
 
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     today_str = datetime.date.today().strftime("%d/%m/%Y")
+
+    # Schema JSON-LD per indicizzazione SEO su Google
+    schema_data = {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": f"Prime Pagine dei Giornali di Oggi - Rassegna Stampa del {today_str}",
+        "description": f"Consulta le prime pagine e copertine dei principali quotidiani italiani ed esteri aggiornate al {today_str}.",
+        "datePublished": now_iso,
+        "dateModified": now_iso,
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://www.brunorachiele.it/p/prime-pagine-dei-giornali.html"
+        },
+        "author": {
+            "@type": "Person",
+            "name": "Bruno Rachiele",
+            "url": "https://www.brunorachiele.it/"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Bruno Rachiele",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://www.brunorachiele.it/favicon.ico"
+            }
+        },
+        "image": [p["image_url"] for p in papers[:3]]
+    }
+
+    schema_json = json.dumps(schema_data, ensure_ascii=False)
 
     custom_css = """<style>
   .prime-pagine-container {
@@ -111,7 +144,7 @@ def main():
   }
   .prime-pagine-header {
     text-align: center;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
     padding: 15px;
     background: #f8fafc;
     border-radius: 8px;
@@ -122,6 +155,56 @@ def main():
     color: #4a5568;
     margin: 0;
   }
+  
+  /* Box promozionale risalto commento */
+  .commento-banner {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    color: #ffffff;
+    border-radius: 12px;
+    padding: 20px 25px;
+    margin-bottom: 30px;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .commento-banner h2 {
+    margin: 0;
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    letter-spacing: -0.02em;
+  }
+  .commento-banner p {
+    margin: 0;
+    font-size: 0.98rem;
+    color: #e0f2fe;
+    max-width: 650px;
+  }
+  .commento-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #ffffff;
+    color: #1e3a8a !important;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 12px 24px;
+    border-radius: 50px;
+    text-decoration: none !important;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    margin-top: 5px;
+  }
+  .commento-btn:hover {
+    background-color: #f8fafc;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  }
+
   .grid-edicola {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -165,6 +248,12 @@ def main():
     font-weight: 700 !important;
   }
   @media (max-width: 600px) {
+    .commento-banner {
+      padding: 18px 15px;
+    }
+    .commento-banner h2 {
+      font-size: 1.15rem !important;
+    }
     .grid-edicola {
       grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
       gap: 12px;
@@ -187,11 +276,26 @@ def main():
       </div>
     </div>"""
 
-    final_html = f"""{custom_css}
+    final_html = f"""
+<script type="application/ld+json">
+{schema_json}
+</script>
+
+{custom_css}
 <div class="prime-pagine-container">
   <div class="prime-pagine-header">
     <p>Edicola Digitale - Ultimo aggiornamento: <strong>{today_str}</strong></p>
   </div>
+
+  <!-- Box Promo Commento Giornaliero -->
+  <div class="commento-banner">
+    <h2>✍️ Il Commento di Oggi</h2>
+    <p>Scopri l'analisi approfondita sui temi principali della rassegna stampa odierna.</p>
+    <a href="{URL_COMMENTO_GIORNALIERO}" class="commento-btn">
+      Leggi il commento alle notizie di oggi &rarr;
+    </a>
+  </div>
+
   <div class="grid-edicola">
     {cards_html}
   </div>
@@ -222,7 +326,7 @@ def main():
         publish=True
     ).execute()
     
-    print(f"[SUCCESS] Pagina aggiornata con successo! Link: {updated_page.get('url')}")
+    print(f"[SUCCESS] Pagina aggiornata e indicizzata con successo! Link: {updated_page.get('url')}")
 
 if __name__ == "__main__":
     main()
