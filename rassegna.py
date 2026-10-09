@@ -16,23 +16,36 @@ SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 if not all([GEMINI_API_KEY, BLOGGER_EMAIL, SENDER_EMAIL, SENDER_PASSWORD]):
     raise ValueError("❌ Uno o più Secrets non sono stati configurati su GitHub!")
 
-# 2. Setup Data e Client
-data_oggi_str = datetime.datetime.now().strftime("%d/%m/%Y")
-data_iso = datetime.datetime.now().strftime("%Y-%m-%d")
+# 2. Setup Date (Formato Esteso in Italiano: es. "09 ottobre 2026")
+mesi_ita = {
+    1: "gennaio", 2: "febbraio", 3: "marzo", 4: "aprile",
+    5: "maggio", 6: "giugno", 7: "luglio", 8: "agosto",
+    9: "settembre", 10: "ottobre", 11: "novembren", 12: "dicembre"
+}
+
+ora_attuale = datetime.datetime.now()
+giorno = ora_attuale.strftime("%d")
+mese = mesi_ita[ora_attuale.month]
+anno = ora_attuale.strftime("%Y")
+
+# Stringa per il titolo (es. "09 ottobre 2026")
+data_estesa_str = f"{giorno} {mese} {anno}"
+data_oggi_str = ora_attuale.strftime("%d/%m/%Y")
+data_iso = ora_attuale.strftime("%Y-%m-%d")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 IMMAGINE_PRINCIPALE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=800&q=80"
 
-# 3. Schema.org JSON-LD per Indicizzazione SEO Avanzata
+# 3. Schema.org JSON-LD per Indicizzazione SEO
 schema_json = {
   "@context": "https://schema.org",
   "@type": "NewsArticle",
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": f"https://www.brunorachiele.it/{datetime.datetime.now().strftime('%Y/%m')}/rassegna-stampa-{data_iso}.html"
+    "@id": f"https://www.brunorachiele.it/{ora_attuale.strftime('%Y/%m')}/rassegna-stampa-{data_iso}.html"
   },
-  "headline": f"Rassegna Stampa & Analisi Politica - {data_oggi_str}",
+  "headline": f"Prime Pagine e Commento del Giorno - {data_estesa_str}",
   "image": [IMMAGINE_PRINCIPALE],
   "datePublished": f"{data_iso}T06:00:00+02:00",
   "dateModified": f"{data_iso}T06:00:00+02:00",
@@ -50,7 +63,7 @@ schema_json = {
       "url": IMMAGINE_PRINCIPALE
     }
   },
-  "description": f"Analisi politica quotidiana e rassegna stampa del {data_oggi_str} a cura di Bruno Rachiele. Focus su governo, economia e stampa internazionale."
+  "description": f"Analisi politica quotidiana e rassegna stampa del {data_estesa_str} a cura di Bruno Rachiele. Focus su governo, economia e stampa internazionale."
 }
 
 schema_html = f'<script type="application/ld+json">\n{json.dumps(schema_json, indent=2)}\n</script>'
@@ -64,12 +77,12 @@ header_html = f"""
 # 4. Prompt per la generazione del testo
 prompt = (
     "Sei un autorevole giornalista ed editor politico d'area conservatrice e di centrodestra (vicino alla linea del Governo Meloni).\n"
-    f"Elabora un commento analitico e una rassegna sintetica dei titoli e temi effettivamente presenti sulle prime pagine dei quotidiani di oggi ({data_oggi_str}).\n\n"
+    f"Elabora un commento analitico e una rassegna sintetica dei titoli e temi effettivamente presenti sulle prime pagine dei quotidiani di oggi ({data_estesa_str}).\n\n"
     "Assicurati che la discesa dei temi certifichi in modo accurato quanto riportato in edicola dalle testate nazionali ed estere.\n"
     "Mantieni uno stile autorevole, lucido e professionale, valorizzando la stabilità dell'esecutivo, il pragmatismo delle riforme economiche e la difesa dell'interesse nazionale.\n\n"
     "Restituisci l'output ESCLUSIVAMENTE in codice HTML pulito (senza tag <html> o <body>) rispettando esattamente questa struttura e stili inline:\n\n"
     "<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2c3e50; max-width: 800px; margin: 0 auto; padding: 10px; line-height: 1.6;\">\n"
-    f"  <h2 style=\"color: #1a252f; border-bottom: 2px solid #003366; padding-bottom: 8px; margin-bottom: 20px;\">🗞️ Rassegna Stampa & Analisi Politica - {data_oggi_str}</h2>\n\n"
+    f"  <h2 style=\"color: #1a252f; border-bottom: 2px solid #003366; padding-bottom: 8px; margin-bottom: 20px;\">🗞️ Rassegna Stampa & Analisi Politica - {data_estesa_str}</h2>\n\n"
     "  <div style=\"background: #f8f9fa; border-left: 4px solid #003366; padding: 15px 20px; margin-bottom: 20px; border-radius: 0 8px 8px 0;\">\n"
     "    <h3 style=\"margin-top:0; color: #003366;\">📌 Il Tema Centrale del Giorno</h3>\n"
     "    <p>[Analisi certificata del fatto politico principale della giornata con focus sulle riforme, l'azione del Governo Meloni e la stabilità del Paese]</p>\n"
@@ -126,15 +139,18 @@ if not response or not response.text:
     raise RuntimeError("❌ Impossibile generare il contenuto.")
 
 html_content = response.text
-contenuto_completo = schema_html + header_html + html_content
 
-# 6. Invio Email via SMTP con solo il Tag [Rassegna Stampa]
+# Inserimento della tag [Rassegna Stampa] in cima al corpo HTML per l'assegnazione automatica della Categoria su Blogger
+tag_categoria = "<p>[Rassegna Stampa]</p>\n"
+contenuto_completo = schema_html + tag_categoria + header_html + html_content
+
+# 6. Invio Email via SMTP
 msg = MIMEMultipart()
 msg['From'] = SENDER_EMAIL
 msg['To'] = BLOGGER_EMAIL
 
-# Solo il tag [Rassegna Stampa] per la categorizzazione automatica
-msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_oggi_str} [Rassegna Stampa]"
+# Titolo pulito con data estesa in italiano
+msg['Subject'] = f"Prime Pagine e Commento del Giorno - {data_estesa_str}"
 
 msg.attach(MIMEText(contenuto_completo, 'html'))
 
@@ -147,7 +163,7 @@ try:
     server.login(SENDER_EMAIL.strip(), SENDER_PASSWORD.strip().replace(" ", ""))
     server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, msg.as_string())
     server.quit()
-    print("✅ RASSEGNA STAMPA PUBBLICATA CON SUCCESSO SU BLOGGER CON TAG RASSEGNA STAMPA!")
+    print("✅ RASSEGNA STAMPA PUBBLICATA CON SUCCESSO SU BLOGGER!")
 except Exception as e:
     print(f"❌ Errore durante l'invio SMTP: {e}")
     raise e
