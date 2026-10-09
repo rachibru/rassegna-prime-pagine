@@ -140,8 +140,8 @@ if not response or not response.text:
 
 html_content = response.text
 
-# Inserimento della tag [Rassegna Stampa] in cima al corpo HTML per l'assegnazione automatica della Categoria su Blogger
-tag_categoria = "<p>[Rassegna Stampa]</p>\n"
+# Inserimento della tag [rassegnastampa] in cima al corpo HTML per l'assegnazione automatica della Categoria su Blogger
+tag_categoria = "<p>[rassegnastampa]</p>\n"
 contenuto_completo = schema_html + tag_categoria + header_html + html_content
 
 # 6. Invio Email via SMTP
