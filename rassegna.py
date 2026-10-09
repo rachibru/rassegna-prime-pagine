@@ -3,6 +3,7 @@ import json
 import time
 import datetime
 from google import genai
+from google.genai import types
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
@@ -11,27 +12,35 @@ from googleapiclient.discovery import build
 # ==============================================================================
 DEFAULT_IMAGE_URL = "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80"
 
-def generate_content_with_retry(client, prompt):
-    """Esegue la generazione su gemini-3.8-flash gestendo i picchi di traffico temporanei (503)."""
+def generate_content_with_robust_retry(client, prompt):
+    """Gestisce il sovraccarico dei server (503) con retry a crescita esponenziale."""
     model_name = "gemini-3.8-flash"
-    
-    for attempt in range(1, 5):
+    max_retries = 6
+    backoff_delay = 10  # Secondi iniziali di attesa
+
+    sys_instruction = "Sei un giornalista politico senior. Genera analisi dettagliate in formato JSON pulito ed esatto."
+
+    for attempt in range(1, max_retries + 1):
         try:
-            print(f"Generazione in corso con {model_name} (tentativo {attempt})...")
+            print(f"Tentativo {attempt} di {max_retries} con il modello {model_name}...")
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
-                config={
-                    "response_mime_type": "application/json"
-                }
+                config=types.GenerateContentConfig(
+                    system_instruction=sys_instruction,
+                    response_mime_type="application/json",
+                    temperature=0.3
+                )
             )
             return response.text
         except Exception as e:
-            print(f"Errore durante il tentativo {attempt}: {e}")
-            if attempt < 4:
-                print("Attesa di 5 secondi prima di riprovare...")
-                time.sleep(5)
+            print(f"Server temporaneamente non disponibile o occupato (Errore: {e})")
+            if attempt < max_retries:
+                print(f"Attesa di {backoff_delay} secondi prima del prossimo tentativo...")
+                time.sleep(backoff_delay)
+                backoff_delay *= 2  # Raddoppia il tempo ad ogni tentativo (10s, 20s, 40s, 80s...)
             else:
+                print("Raggiunto il numero massimo di tentativi.")
                 raise e
 
 def main():
@@ -51,7 +60,7 @@ def main():
     today_str = datetime.date.today().strftime("%d/%m/%Y")
     
     prompt = f"""
-    Sei un giornalista politico e analista senior. Genera un'approfondita rassegna stampa politica italiana per la giornata di oggi ({today_str}).
+    Genera un'approfondita rassegna stampa politica italiana per la giornata di oggi ({today_str}).
     
     L'articolo deve essere formattato in HTML pulito e contenere esattamente le seguenti sezioni:
     - <h2>Introduzione</h2>: Panoramica e sintesi dei fatti del giorno.
@@ -68,7 +77,7 @@ def main():
     }}
     """
 
-    response_text = generate_content_with_retry(gemini_client, prompt)
+    response_text = generate_content_with_robust_retry(gemini_client, prompt)
 
     data = json.loads(response_text)
     post_title = data.get("title")
