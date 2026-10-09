@@ -1,5 +1,4 @@
 import os
-import re
 import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -26,19 +25,16 @@ QUOTIDIANI_MAP = [
     {"name": "Le Figaro", "url": "https://www.giornalone.it/prima-pagina-le-figaro/"}
 ]
 
-def extract_image_url(img_tag):
-    """Estrae il miglior URL dell'immagine valutando vari attributi."""
+def extract_clean_image_url(img_tag):
     if not img_tag:
         return None
 
-    # Controlla srcset se presente (spesso contiene l'immagine ad alta risoluzione)
     srcset = img_tag.get("srcset") or img_tag.get("data-srcset") or ""
     if srcset:
         urls = [item.strip().split(" ")[0] for item in srcset.split(",") if item.strip()]
         if urls:
-            return urls[-1] # Prende l'ultima (di solito la risoluzione più alta)
+            return urls[-1]
 
-    # Controlla attributi standard
     for attr in ["data-src", "data-lazy-src", "src", "data-original"]:
         val = img_tag.get(attr)
         if val and not val.startswith("data:image"):
@@ -70,25 +66,27 @@ def fetch_prime_pagine():
             soup = BeautifulSoup(response.text, "html.parser")
             img_src = None
 
-            # 1. Cerca l'immagine principale con id o classe 'copertina'
-            target_img = soup.find("img", id=lambda x: x and "copertina" in x.lower()) or \
-                         soup.find("img", class_=lambda x: x and "copertina" in x.lower()) or \
-                         soup.find("img", alt=lambda x: x and "prima pagina" in x.lower())
+            # Isola il contenitore del post principale evitando la sidebar e i correlati
+            content_area = soup.find("div", class_=lambda x: x and ("entry-content" in x.lower() or "post-content" in x.lower())) or \
+                           soup.find("article")
 
-            img_src = extract_image_url(target_img)
-
-            # 2. Fallback: Cerca dentro l'articolo principale
-            if not img_src:
-                article = soup.find("article") or soup.find("main") or soup.find("div", class_=lambda x: x and "content" in x.lower())
-                if article:
-                    for img in article.find_all("img"):
-                        candidate = extract_image_url(img)
-                        if candidate and "logo" not in candidate.lower() and "icon" not in candidate.lower():
+            if content_area:
+                # Cerca l'immagine specifica all'interno del contenuto principale
+                for img in content_area.find_all("img"):
+                    candidate = extract_clean_image_url(img)
+                    if candidate:
+                        # Ignora banner, icone o loghi
+                        if not any(b in candidate.lower() for b in ["logo", "icon", "banner", "avatar"]):
                             img_src = candidate
                             break
 
+            # Fallback se la classe content non viene trovata
+            if not img_src:
+                target_img = soup.find("img", id=lambda x: x and "copertina" in x.lower()) or \
+                             soup.find("img", class_=lambda x: x and "copertina" in x.lower())
+                img_src = extract_clean_image_url(target_img)
+
             if img_src:
-                # Pulisce parametri di query se presenti
                 img_src = img_src.split("?")[0]
 
                 if img_src.startswith("//"):
@@ -100,12 +98,12 @@ def fetch_prime_pagine():
                     "title": name,
                     "image_url": img_src
                 })
-                print(f"[+] Estratto con successo {name}: {img_src}")
+                print(f"[+] Trovata copertina corretta per {name}")
             else:
-                print(f"[-] Immagine non individuata per {name}")
+                print(f"[-] Copertina non trovata per {name}")
 
         except Exception as e:
-            print(f"[-] Eccezione su {name}: {e}")
+            print(f"[-] Errore su {name}: {e}")
 
     return papers
 
@@ -256,7 +254,7 @@ def main():
         publish=True
     ).execute()
     
-    print(f"[SUCCESS] Pagina aggiornata e pubblicata! Link: {updated_page.get('url')}")
+    print(f"[SUCCESS] Pagina aggiornata con le copertine esatte! Link: {updated_page.get('url')}")
 
 if __name__ == "__main__":
     main()
