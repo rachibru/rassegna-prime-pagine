@@ -15,7 +15,7 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret (GEMINI_API_KEY, BLOGGER_BLOG_ID, BLOGGER_CLIENT_ID, BLOGGER_CLIENT_SECRET, BLOGGER_REFRESH_TOKEN) devono essere configurati.")
 
-    # 2. Inizializza il client Gemini per generare il contenuto HTML e lo Schema.org iniziale
+    # 2. Inizializza il client Gemini per generare il contenuto HTML
     gemini_client = genai.Client(api_key=gemini_api_key)
     
     prompt = """
@@ -26,7 +26,7 @@ def main():
     """
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=prompt,
         config={
             "response_mime_type": "application/json"
@@ -105,7 +105,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Schema.org iniettato ed altezze/URL sincronizzati con successo!")
+    print("Schema.org iniettato e URL sincronizzati con successo!")
 
 if __name__ == "__main__":
     main()
