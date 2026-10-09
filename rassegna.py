@@ -151,7 +151,7 @@ try:
     print("🔑 Autenticazione in corso...")
     server.login(SENDER_EMAIL.strip(), SENDER_PASSWORD.strip().replace(" ", ""))
     print("📤 Invio messaggio...")
-    server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, server.as_string())
+    server.sendmail(SENDER_EMAIL, BLOGGER_EMAIL, msg.as_string())
     server.quit()
     print("✅ RASSEGNA INVIATA E PUBBLICATA CON SUCCESSO!")
 except Exception as e:
