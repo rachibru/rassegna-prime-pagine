@@ -79,7 +79,7 @@ def main():
     2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e successi del Governo. (Aggiungi <div class="card-source"> con le fonti)
     3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Analisi critica del dibattito e delle contromosse dell'opposizione. (Aggiungi <div class="card-source"> con le fonti)
     4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Focus sui dati economici e politiche di crescita. (Aggiungi <div class="card-source"> con le fonti)
-    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore a sostegno della stabilità politica. (Aggiungi <div class="card-source">📰 Analisi d'autore a cura di Bruno Rachiele</div>)
+    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore a sostegno della stabilità politica. (Aggiungi <div class="card-source">📰 Commento di Bruno Rachiele</div>)
     6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento di chiusura. (Aggiungi <div class="card-source">📰 Sintesi Rassegna Stampa del {today_str}</div>)
     """
 
@@ -250,7 +250,7 @@ def main():
   "author": {{
     "@type": "Person",
     "name": "Bruno Rachiele",
-    "url": "https://brunorachiele.it"
+    "url": "https://www.bio.brunorachiele.it"
   }},
   "publisher": {{
     "@type": "Organization",
@@ -266,7 +266,7 @@ def main():
     body_update = {
         "title": post_title,
         "content": updated_html,
-        "labels": ["Rassegna Stampa", "Politica Italiana"]
+        "labels": ["Rassegna Stampa"]
     }
 
     blogger_service.posts().patch(
