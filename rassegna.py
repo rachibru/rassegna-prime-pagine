@@ -49,7 +49,8 @@ def main():
         "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
         "Scrivi rassegne stampa politiche quotidiane chiare, ben strutturate e formattate in HTML visivamente impeccabile, "
         "trasmettendo una visione favorevole all'operato del Governo, evidenziando i risultati della maggioranza e "
-        "analizzando in modo critico ma elegante le posizioni dell'opposizione."
+        "analizzando in modo critico ma elegante le posizioni dell'opposizione. "
+        "Per ogni notizia riportata indica espressamente la testata o la fonte giornalistica di riferimento (es. Il Giornale, Il Messaggero, Libero, Corriere della Sera, ANSA)."
     )
 
     prompt = f"""
@@ -58,8 +59,10 @@ def main():
     STRUTTURA OBBLIGATORIA DELLE SEZIONI:
     - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1>.
     
-    Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML così strutturato:
-    
+    Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML stilizzato. 
+    OGNI BOX DEVE INCLUDERE IN FONDO IL TAG <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>.
+
+    Esempio di struttura della card:
     <div class="news-card">
       <div class="card-header">
         <span class="card-icon">📌</span>
@@ -68,15 +71,16 @@ def main():
       <div class="card-body">
         <p>Sintesi dei fatti principali della giornata...</p>
       </div>
+      <div class="card-source">📰 Fonte principale: Il Giornale / Il Messaggero</div>
     </div>
 
     Crea esattamente questi 6 box card:
-    1. <h2>In Primo Piano</h2> (Icona: 📌) - Sintesi e fatti principali.
-    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e successi del Governo.
-    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Analisi critica del dibattito e delle contromosse dell'opposizione.
-    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Focus sui dati economici e politiche di crescita.
-    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore a sostegno della stabilità politica.
-    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento di chiusura.
+    1. <h2>In Primo Piano</h2> (Icona: 📌) - Sintesi e fatti principali. (Aggiungi <div class="card-source"> con le fonti principali)
+    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e successi del Governo. (Aggiungi <div class="card-source"> con le fonti)
+    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Analisi critica del dibattito e delle contromosse dell'opposizione. (Aggiungi <div class="card-source"> con le fonti)
+    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Focus sui dati economici e politiche di crescita. (Aggiungi <div class="card-source"> con le fonti)
+    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore a sostegno della stabilità politica. (Aggiungi <div class="card-source">📰 Analisi d'autore a cura di Bruno Rachiele</div>)
+    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento di chiusura. (Aggiungi <div class="card-source">📰 Sintesi Rassegna Stampa del {today_str}</div>)
     """
 
     raw_html = get_gemini_content(gemini_client, prompt, sys_instruction)
@@ -92,7 +96,7 @@ def main():
             body_content = raw_html.replace(line, "").strip()
             break
 
-    # Stili CSS incorporati e Mobile-Friendly
+    # Stili CSS incorporati, Mobile-Friendly e Fonte Badge
     custom_css = """
 <style>
   .rassegna-container {
@@ -160,6 +164,18 @@ def main():
     margin-bottom: 6px;
     color: #4a5568;
   }
+  .card-source {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #2b6cb0;
+    display: inline-block;
+    background: #ebf8ff;
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
   @media (max-width: 600px) {
     .rassegna-container {
       padding: 5px;
@@ -170,6 +186,9 @@ def main():
     }
     .card-header h2 {
       font-size: 1.1rem !important;
+    }
+    .card-source {
+      font-size: 0.82rem;
     }
   }
 </style>
@@ -256,7 +275,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Layout responsive e Schema.org sincronizzati!")
+    print("Layout responsive con Fonti e Schema.org pubblicati correttamente!")
 
 if __name__ == "__main__":
     main()
