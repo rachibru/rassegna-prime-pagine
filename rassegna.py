@@ -9,21 +9,38 @@ from googleapiclient.discovery import build
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
 def fetch_live_news():
-    """Recupera gratuitamente le notizie reali di oggi su politica ed economia italiana."""
-    print("Ricerca notizie live con DuckDuckGo (Gratis e Senza Limiti)...")
+    """Recupera notizie reali di OGGI divise per le macro-aree tematiche richieste."""
+    print("Ricerca notizie live per temi (Politica, Esteri, Economia, Elezioni, Giornali)...")
     ddgs = DDGS()
     
-    query = "politica economia italia quotidiani esteri notizie"
-    results = ddgs.news(keywords=query, region="it-it", safesearch="off", max_results=12)
+    today = datetime.date.today()
+    mesi = {
+        1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
+        5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
+        9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
+    }
+    date_query = f"{today.day} {mesi[today.month]}"
+    
+    queries = {
+        "POLITICA ED ELEZIONI": f"politica italia elezioni sondaggi parlamento {date_query}",
+        "ESTERI ED ATTUALITA": f"esteri geopolitica mondo notizie attualita {date_query}",
+        "ECONOMIA E GIORNALI": f"economia fisco mercati lavoro prime pagine giornali {date_query}"
+    }
     
     news_text = ""
-    for idx, r in enumerate(results, 1):
-        title = r.get("title", "")
-        body = r.get("body", "")
-        source = r.get("source", "Testata Giornalistica")
-        news_text += f"{idx}. [{source}] {title}: {body}\n"
-        
-    return news_text if news_text else "Notizie principali del giorno sulle riforme del Governo e sul dibattito politico ed economico."
+    for category, q in queries.items():
+        news_text += f"\n--- {category} DI OGGI ---\n"
+        try:
+            results = ddgs.news(keywords=q, region="it-it", safesearch="off", max_results=5)
+            for idx, r in enumerate(results, 1):
+                source = r.get("source", "Testata Giornalistica")
+                title = r.get("title", "")
+                body = r.get("body", "")
+                news_text += f"{idx}. [{source}] {title}: {body}\n"
+        except Exception as e:
+            print(f"[-] Errore durante la ricerca per {category}: {e}")
+            
+    return news_text
 
 def main():
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
@@ -35,9 +52,9 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
-    # 1. Recupera le notizie live di oggi
+    # 1. Recupera le notizie tematiche di oggi
     live_news_context = fetch_live_news()
-    print(f"[+] Estratte {len(live_news_context.splitlines())} notizie live.")
+    print("[+] Notizie tematiche estratte con successo.")
 
     # 2. Inizializza Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
@@ -53,37 +70,33 @@ def main():
 
     sys_instruction = (
         "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
-        "Basandoti ESCLUSIVAMENTE sulle notizie reali di oggi che ti vengono fornite, scrivi una rassegna stampa "
-        "chiara, ben strutturata e formattata in HTML visivamente impeccabile. "
-        "Trasmetti una visione favorevole all'operato del Governo, evidenziando i risultati della maggioranza e "
-        "analizzando in modo critico ma elegante le posizioni dell'opposizione. "
-        "Per ogni notizia riportata indica la testata o fonte giornalistica reale indicata nel testo."
+        "Basandoti sui dati ricevuti, scrivi una rassegna stampa quotidiana chiara, approfondita e formattata in HTML visivamente impeccabile. "
+        "Analizza i fatti con taglio analitico, mantenendo una prospettiva favorevole alla stabilita e alle riforme liberal-conservatrici. "
+        "Per ogni sezione indica espressamente le fonti o testate citate nei dati."
     )
 
     prompt = f"""
-    Ecco i fatti e le notizie REALI estratte dai quotidiani per la giornata di OGGI ({today_formatted}):
-    ---
+    Ecco i fatti e le notizie REALI estratte per la giornata di OGGI ({today_formatted}):
     {live_news_context}
-    ---
 
-    Usa queste notizie per scrivere la rassegna stampa politica ed economica del giorno.
+    Componi la rassegna organizzando il contenuto RIGOROSAMENTE in queste 6 macro-aree tematiche:
 
     STRUTTURA OBBLIGATORIA DELLE SEZIONI:
-    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1> (es. <h1>Rassegna Stampa del {today_formatted}: Titolo Notizia Principale</h1>).
+    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1> (es. <h1>Rassegna Stampa del {today_formatted}: Titolo del fatto principale</h1>).
     
     Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML stilizzato. 
     OGNI BOX DEVE INCLUDERE IN FONDO IL TAG <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>.
 
-    Crea esattamente questi 6 box card basati sulle notizie fornite:
-    1. <h2>In Primo Piano</h2> (Icona: 📌) - Il fatto principale della giornata di oggi.
-    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e dichiarazioni della maggioranza di oggi.
-    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Le reazioni e le mosse dell'opposizione di oggi.
-    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Dati economici, mercati o norme della giornata.
-    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore sui fatti odierni a sostegno della stabilità politica.
-    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento finale.
+    Crea esattamente questi 6 box card:
+    1. <h2>Primo Piano & Attualità</h2> (Icona: 📌) - Il fatto principale e gli avvenimenti di cronaca/attualità più caldi della giornata.
+    2. <h2>Politica & Istituzioni</h2> (Icona: 🏛️) - Riforme, dibattito parlamentare, interventi istituzionali e dinamiche di governo.
+    3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐) - Notizie internazionali, scenari geopolitici e il ruolo dell'Italia nel mondo.
+    4. <h2>Dalle Prime Pagine</h2> (Icona: 📰) - Come i principali quotidiani hanno aperto e raccontato le notizie di oggi.
+    5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️) - Tendenze elettorali, sondaggi politici, vita interna dei partiti e prossime scadenze alle urne.
+    6. <h2>Economia & Mercati</h2> (Icona: 📈) - Dati economici, fisco, lavoro, imprese e andamento dei mercati finanziari.
     """
 
-    print("Elaborazione rassegna con Gemini 3.8...")
+    print("Elaborazione rassegna tematica con Gemini 3.8...")
     response = gemini_client.models.generate_content(
         model="gemini-3.8-flash",
         contents=prompt,
@@ -245,7 +258,7 @@ def main():
         body=body_update
     ).execute()
 
-    print(f"[SUCCESS] Rassegna pubblicata con successo! URL: {post_url}")
+    print(f"[SUCCESS] Rassegna tematica pubblicata con successo! URL: {post_url}")
 
 if __name__ == "__main__":
     main()
