@@ -2,12 +2,14 @@ name: Pubblicazione Pagina Prime Pagine
 
 on:
   schedule:
-    # Esegue ogni giorno alle 05:30 Italiane (03:30 UTC durante ora legale)
-    - cron: '30 3 * * *'
-  workflow_dispatch:
+    # 05:00 UTC = 07:00 ora italiana (Legale CEST)
+    - cron: '0 5 * * *'
+    # 18:00 UTC = 20:00 ora italiana (Legale CEST)
+    - cron: '0 18 * * *'
+  workflow_dispatch: # Mantiene la possibilità di avviarlo a mano quando desideri
 
 jobs:
-  run-prime-pagine:
+  run-script:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout del codice
@@ -16,14 +18,14 @@ jobs:
       - name: Configurazione Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
-      - name: Installazione Dipendenze
+      - name: Installazione dipendenze
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 google-api-python-client google-auth
+          pip install requests beautifulsoup4 google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-      - name: Esecuzione Script Prime Pagine
+      - name: Esecuzione dello script prime_pagine.py
         env:
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
           BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
