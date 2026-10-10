@@ -1,38 +1,32 @@
 import os
-import time
 import datetime
+from duckduckgo_search import DDGS
 from google import genai
 from google.genai import types
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-# Immagine di copertina personalizzata
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
-def get_gemini_content(client, prompt, sys_instruction):
-    """Richiesta a Gemini 3.8 con Google Search Grounding attivo e retry."""
-    for attempt in range(1, 5):
-        try:
-            print(f"Ricerca notizie live e generazione articolo in corso con Gemini 3.8 (tentativo {attempt})...")
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=sys_instruction,
-                    temperature=0.3,
-                    tools=[types.Tool(google_search=types.GoogleSearch())]  # Syntax corretta per Search Grounding
-                )
-            )
-            return response.text
-        except Exception as e:
-            print(f"Server temporaneamente occupato o errore: {e}")
-            if attempt < 4:
-                time.sleep(attempt * 5)
-            else:
-                raise e
+def fetch_live_news():
+    """Recupera gratuitamente le notizie reali di oggi su politica ed economia italiana."""
+    print("Ricerca notizie live con DuckDuckGo (Gratis e Senza Limiti)...")
+    ddgs = DDGS()
+    
+    query = "politica economia italia quotidiani notizie"
+    # Cerca le notizie pubblicate nelle ultime 24 ore
+    results = ddgs.news(keywords=query, region="it-it", safesearch="off", max_results=12)
+    
+    news_text = ""
+    for idx, r in enumerate(results, 1):
+        title = r.get("title", "")
+        body = r.get("body", "")
+        source = r.get("source", "Testata Giornalistica")
+        news_text += f"{idx}. [{source}] {title}: {body}\n"
+        
+    return news_text if news_text else "Notizie principali del giorno sulle riforme del Governo e sul dibattito politico ed economico."
 
 def main():
-    # 1. Recupera i Secret
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
     blog_id = os.environ.get("BLOGGER_BLOG_ID")
     client_id = os.environ.get("BLOGGER_CLIENT_ID")
@@ -41,6 +35,10 @@ def main():
 
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
+
+    # 1. Recupera le notizie live di oggi
+    live_news_context = fetch_live_news()
+    print(f"[+] Estratte {len(live_news_context.splitlines())} notizie live.")
 
     # 2. Inizializza Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
@@ -56,46 +54,47 @@ def main():
 
     sys_instruction = (
         "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
-        "Usa la ricerca Google per estrarre le notizie POLITICHE ed ECONOMICHE ITALIANE REALI pubblicate OGGI. "
-        "Scrivi rassegne stampa quotidiane chiare, ben strutturate e formattate in HTML visivamente impeccabile, "
-        "trasmettendo una visione favorevole all'operato del Governo, evidenziando i risultati della maggioranza e "
+        "Basandoti ESCLUSIVAMENTE sulle notizie reali di oggi che ti vengono fornite, scrivi una rassegna stampa "
+        "chiara, ben strutturata e formattata in HTML visivamente impeccabile. "
+        "Trasmetti una visione favorevole all'operato del Governo, evidenziando i risultati della maggioranza e "
         "analizzando in modo critico ma elegante le posizioni dell'opposizione. "
-        "Per ogni notizia riportata indica espressamente la testata o la fonte giornalistica di riferimento reali (es. Il Giornale, Il Messaggero, Libero, Corriere della Sera, ANSA)."
+        "Per ogni notizia riportata indica la testata o fonte giornalistica reale indicata nel testo."
     )
 
     prompt = f"""
-    Cerca le notizie politiche ed economiche italiane di OGGI ({today_formatted}) e scrivi la rassegna stampa quotidiana.
+    Ecco i fatti e le notizie REALI estratte dai quotidiani per la giornata di OGGI ({today_formatted}):
+    ---
+    {live_news_context}
+    ---
+
+    Usa queste notizie per scrivere la rassegna stampa politica ed economica del giorno.
 
     STRUTTURA OBBLIGATORIA DELLE SEZIONI:
-    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1> (es. <h1>Rassegna Stampa del {today_formatted}: Titolo della Notizia Principale</h1>).
+    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1> (es. <h1>Rassegna Stampa del {today_formatted}: Titolo Notizia Principale</h1>).
     
     Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML stilizzato. 
     OGNI BOX DEVE INCLUDERE IN FONDO IL TAG <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>.
 
-    Esempio di struttura della card:
-    <div class="news-card">
-      <div class="card-header">
-        <span class="card-icon">📌</span>
-        <h2>In Primo Piano</h2>
-      </div>
-      <div class="card-body">
-        <p>Sintesi dei fatti reali principali di oggi...</p>
-      </div>
-      <div class="card-source">📰 Fonte principale: Il Giornale / Il Messaggero</div>
-    </div>
-
-    Crea esattamente questi 6 box card basati sulle notizie di OGGI:
-    1. <h2>In Primo Piano</h2> (Icona: 📌) - Il fatto principale della giornata di oggi. (Aggiungi <div class="card-source"> con le fonti reali)
-    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e dichiarazioni della maggioranza di oggi. (Aggiungi <div class="card-source"> con le fonti)
-    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Le reazioni e le mosse dell'opposizione di oggi. (Aggiungi <div class="card-source"> con le fonti)
-    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Dati economici, mercati o norme della giornata. (Aggiungi <div class="card-source"> con le fonti)
-    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore sui fatti odierni a sostegno della stabilità politica. (Aggiungi <div class="card-source">📰 Commento di Bruno Rachiele</div>)
-    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento finale. (Aggiungi <div class="card-source">📰 Sintesi Rassegna Stampa del {today_str}</div>)
+    Crea esattamente questi 6 box card basati sulle notizie fornite:
+    1. <h2>In Primo Piano</h2> (Icona: 📌) - Il fatto principale della giornata di oggi.
+    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e dichiarazioni della maggioranza di oggi.
+    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Le reazioni e le mosse dell'opposizione di oggi.
+    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Dati economici, mercati o norme della giornata.
+    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore sui fatti odierni a sostegno della stabilità politica.
+    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento finale.
     """
 
-    raw_html = get_gemini_content(gemini_client, prompt, sys_instruction)
+    print("Elaborazione rassegna con Gemini 3.8...")
+    response = gemini_client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=sys_instruction,
+            temperature=0.3
+        )
+    )
+    raw_html = response.text
 
-    # Estrae il titolo <h1> e isola il contenuto
     lines = raw_html.strip().split("\n")
     post_title = f"Rassegna Stampa del {today_formatted}"
     body_content = raw_html
@@ -132,11 +131,6 @@ def main():
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
     margin-bottom: 24px;
     padding: 20px 24px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  .news-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
   }
   .card-header {
     display: flex;
@@ -162,17 +156,6 @@ def main():
     color: #4a5568;
     margin-bottom: 12px;
   }
-  .card-body p:last-child {
-    margin-bottom: 0;
-  }
-  .card-body ul {
-    padding-left: 20px;
-    margin: 10px 0;
-  }
-  .card-body li {
-    margin-bottom: 6px;
-    color: #4a5568;
-  }
   .card-source {
     margin-top: 15px;
     padding-top: 10px;
@@ -184,21 +167,6 @@ def main():
     background: #ebf8ff;
     padding: 6px 12px;
     border-radius: 6px;
-  }
-  @media (max-width: 600px) {
-    .rassegna-container {
-      padding: 5px;
-    }
-    .news-card {
-      padding: 16px 18px;
-      margin-bottom: 18px;
-    }
-    .card-header h2 {
-      font-size: 1.1rem !important;
-    }
-    .card-source {
-      font-size: 0.82rem;
-    }
   }
 </style>
 """
@@ -236,8 +204,6 @@ def main():
 
     post_id = published_post.get("id")
     post_url = published_post.get("url")
-
-    print(f"Post pubblicato con successo! URL: {post_url}")
 
     iso_date = datetime.datetime.now().isoformat()
     schema_org_script = f"""
@@ -280,7 +246,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Rassegna live generata con Gemini 3.8 e pubblicata con successo!")
+    print(f"[SUCCESS] Rassegna pubblicata con successo! URL: {post_url}")
 
 if __name__ == "__main__":
     main()
