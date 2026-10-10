@@ -13,7 +13,7 @@ def fetch_live_news():
     print("Ricerca notizie live con DuckDuckGo (Gratis e Senza Limiti)...")
     ddgs = DDGS()
     
-    query = "politica economia italia quotidiani notizie"
+    query = "politica economia italia quotidiani esteri notizie"
     results = ddgs.news(keywords=query, region="it-it", safesearch="off", max_results=12)
     
     news_text = ""
@@ -224,7 +224,7 @@ def main():
   }},
   "publisher": {{
     "@type": "Organization",
-    "name": "Bruno Rachiele",
+    "name": "brunorachiele.it",
     "url": "https://brunorachiele.it"
   }}
 }}
