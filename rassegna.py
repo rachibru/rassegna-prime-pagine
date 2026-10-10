@@ -10,16 +10,17 @@ from googleapiclient.discovery import build
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
 def get_gemini_content(client, prompt, sys_instruction):
-    """Richiesta leggera a Gemini con meccanismo di retry."""
+    """Richiesta a Gemini con Google Search Grounding attivo e retry."""
     for attempt in range(1, 5):
         try:
-            print(f"Generazione articolo in corso (tentativo {attempt})...")
+            print(f"Ricerca notizie live e generazione articolo in corso (tentativo {attempt})...")
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",  # Modello consigliato e nativo con Google Search Grounding
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction,
-                    temperature=0.4
+                    temperature=0.3,
+                    tools=[{"google_search": {}}]  # <-- ABILITA LA RICERCA GOOGLE IN TEMPO REALE
                 )
             )
             return response.text
@@ -43,21 +44,31 @@ def main():
 
     # 2. Inizializza Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
-    today_str = datetime.date.today().strftime("%d/%m/%Y")
+    
+    # Formattazione data italiana
+    today = datetime.date.today()
+    mesi = {
+        1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
+        5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
+        9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
+    }
+    today_formatted = f"{today.day} {mesi[today.month]} {today.year}"
+    today_str = today.strftime("%d/%m/%Y")
 
     sys_instruction = (
         "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
-        "Scrivi rassegne stampa politiche quotidiane chiare, ben strutturate e formattate in HTML visivamente impeccabile, "
+        "Usa la ricerca Google per estrarre le notizie POLITICHE ed ECONOMICHE ITALIANE REALI pubblicate OGGI. "
+        "Scrivi rassegne stampa quotidiane chiare, ben strutturate e formattate in HTML visivamente impeccabile, "
         "trasmettendo una visione favorevole all'operato del Governo, evidenziando i risultati della maggioranza e "
         "analizzando in modo critico ma elegante le posizioni dell'opposizione. "
-        "Per ogni notizia riportata indica espressamente la testata o la fonte giornalistica di riferimento (es. Il Giornale, Il Messaggero, Libero, Corriere della Sera, ANSA)."
+        "Per ogni notizia riportata indica espressamente la testata o la fonte giornalistica di riferimento reali (es. Il Giornale, Il Messaggero, Libero, Corriere della Sera, ANSA)."
     )
 
     prompt = f"""
-    Scrivi la rassegna stampa politica per la giornata di oggi ({today_str}).
+    Cerca le notizie politiche ed economiche italiane di OGGI ({today_formatted}) e scrivi la rassegna stampa quotidiana.
 
     STRUTTURA OBBLIGATORIA DELLE SEZIONI:
-    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1>.
+    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1> (es. <h1>Rassegna Stampa del {today_formatted}: Titolo della Notizia Principale</h1>).
     
     Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML stilizzato. 
     OGNI BOX DEVE INCLUDERE IN FONDO IL TAG <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>.
@@ -69,25 +80,25 @@ def main():
         <h2>In Primo Piano</h2>
       </div>
       <div class="card-body">
-        <p>Sintesi dei fatti principali della giornata...</p>
+        <p>Sintesi dei fatti reali principali di oggi...</p>
       </div>
       <div class="card-source">📰 Fonte principale: Il Giornale / Il Messaggero</div>
     </div>
 
-    Crea esattamente questi 6 box card:
-    1. <h2>In Primo Piano</h2> (Icona: 📌) - Sintesi e fatti principali. (Aggiungi <div class="card-source"> con le fonti principali)
-    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e successi del Governo. (Aggiungi <div class="card-source"> con le fonti)
-    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Analisi critica del dibattito e delle contromosse dell'opposizione. (Aggiungi <div class="card-source"> con le fonti)
-    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Focus sui dati economici e politiche di crescita. (Aggiungi <div class="card-source"> con le fonti)
-    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore a sostegno della stabilità politica. (Aggiungi <div class="card-source">📰 Commento di Bruno Rachiele</div>)
-    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento di chiusura. (Aggiungi <div class="card-source">📰 Sintesi Rassegna Stampa del {today_str}</div>)
+    Crea esattamente questi 6 box card basati sulle notizie di OGGI:
+    1. <h2>In Primo Piano</h2> (Icona: 📌) - Il fatto principale della giornata di oggi. (Aggiungi <div class="card-source"> con le fonti reali)
+    2. <h2>Governo e Maggioranza</h2> (Icona: 🏛️) - Provvedimenti, riforme e dichiarazioni della maggioranza di oggi. (Aggiungi <div class="card-source"> con le fonti)
+    3. <h2>Le Opposizioni</h2> (Icona: 🗣️) - Le reazioni e le mosse dell'opposizione di oggi. (Aggiungi <div class="card-source"> con le fonti)
+    4. <h2>Economia e Lavoro</h2> (Icona: 📈) - Dati economici, mercati o norme della giornata. (Aggiungi <div class="card-source"> con le fonti)
+    5. <h2>La Riflessione di Bruno Rachiele</h2> (Icona: ✍️) - Un paragrafo incisivo d'autore sui fatti odierni a sostegno della stabilità politica. (Aggiungi <div class="card-source">📰 Commento di Bruno Rachiele</div>)
+    6. <h2>In Sintesi</h2> (Icona: 🎯) - Breve commento finale. (Aggiungi <div class="card-source">📰 Sintesi Rassegna Stampa del {today_str}</div>)
     """
 
     raw_html = get_gemini_content(gemini_client, prompt, sys_instruction)
 
     # Estrae il titolo <h1> e isola il contenuto
     lines = raw_html.strip().split("\n")
-    post_title = f"Rassegna Stampa del {today_str}"
+    post_title = f"Rassegna Stampa del {today_formatted}"
     body_content = raw_html
 
     for line in lines:
@@ -194,7 +205,6 @@ def main():
 </style>
 """
 
-    # Unione di CSS + Immagine Copertina + Box Contenuto
     final_article_html = f"""
 {custom_css}
 <div class="rassegna-container">
@@ -275,7 +285,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Layout responsive con Fonti e Schema.org pubblicati correttamente!")
+    print("Rassegna live con notizie reali pubblicata con successo su Blogger!")
 
 if __name__ == "__main__":
     main()
