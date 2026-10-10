@@ -10,22 +10,22 @@ from googleapiclient.discovery import build
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
 def get_gemini_content(client, prompt, sys_instruction):
-    """Richiesta a Gemini con Google Search Grounding attivo e retry."""
+    """Richiesta a Gemini 3.8 con Google Search Grounding attivo e retry."""
     for attempt in range(1, 5):
         try:
-            print(f"Ricerca notizie live e generazione articolo in corso (tentativo {attempt})...")
+            print(f"Ricerca notizie live e generazione articolo in corso con Gemini 3.8 (tentativo {attempt})...")
             response = client.models.generate_content(
-                model="gemini-2.5-flash",  # Modello consigliato e nativo con Google Search Grounding
+                model="gemini-3.8-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction,
                     temperature=0.3,
-                    tools=[{"google_search": {}}]  # <-- ABILITA LA RICERCA GOOGLE IN TEMPO REALE
+                    tools=[types.Tool(google_search=types.GoogleSearch())]  # Syntax corretta per Search Grounding
                 )
             )
             return response.text
         except Exception as e:
-            print(f"Server temporaneamente occupato: {e}")
+            print(f"Server temporaneamente occupato o errore: {e}")
             if attempt < 4:
                 time.sleep(attempt * 5)
             else:
@@ -45,7 +45,6 @@ def main():
     # 2. Inizializza Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
     
-    # Formattazione data italiana
     today = datetime.date.today()
     mesi = {
         1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
@@ -107,7 +106,6 @@ def main():
             body_content = raw_html.replace(line, "").strip()
             break
 
-    # Stili CSS incorporati, Mobile-Friendly e Fonte Badge
     custom_css = """
 <style>
   .rassegna-container {
@@ -213,7 +211,6 @@ def main():
 </div>
 """
 
-    # 3. Autenticazione OAuth 2.0 per Blogger API v3
     creds = Credentials(
         token=None,
         refresh_token=refresh_token,
@@ -225,7 +222,6 @@ def main():
 
     blogger_service = build("blogger", "v3", credentials=creds)
 
-    # 4. Step 1: Pubblicazione del post su Blogger
     body_initial = {
         "title": post_title,
         "content": final_article_html,
@@ -243,7 +239,6 @@ def main():
 
     print(f"Post pubblicato con successo! URL: {post_url}")
 
-    # 5. Step 2: Iniezione Schema.org NewsArticle
     iso_date = datetime.datetime.now().isoformat()
     schema_org_script = f"""
 <script type="application/ld+json">
@@ -285,7 +280,7 @@ def main():
         body=body_update
     ).execute()
 
-    print("Rassegna live con notizie reali pubblicata con successo su Blogger!")
+    print("Rassegna live generata con Gemini 3.8 e pubblicata con successo!")
 
 if __name__ == "__main__":
     main()
