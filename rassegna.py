@@ -14,7 +14,6 @@ def fetch_live_news():
     ddgs = DDGS()
     
     query = "politica economia italia quotidiani notizie"
-    # Cerca le notizie pubblicate nelle ultime 24 ore
     results = ddgs.news(keywords=query, region="it-it", safesearch="off", max_results=12)
     
     news_text = ""
