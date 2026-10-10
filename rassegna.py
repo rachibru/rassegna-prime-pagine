@@ -1,4 +1,5 @@
 import os
+import time
 import datetime
 from duckduckgo_search import DDGS
 from google import genai
@@ -42,6 +43,33 @@ def fetch_live_news():
             
     return news_text
 
+def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
+    """Chiamata robusta con retry automatico per 503 UNAVAILABLE e 429 RATE LIMIT."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"Tentativo {attempt}/{max_retries}: Elaborazione rassegna con Gemini 3.8...")
+            response = gemini_client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=sys_instruction,
+                    temperature=0.3
+                )
+            )
+            return response.text
+        except Exception as e:
+            err_str = str(e)
+            print(f"[-] Errore al tentativo {attempt}: {err_str}")
+            
+            if attempt < max_retries:
+                # Se è un 503 (server occupato) o 429 (troppe richieste), attende prima di riprovare
+                wait_time = attempt * 15  # Attende 15s, 30s, 45s, 60s...
+                print(f"[!] Server occupato o limite raggiunto. Attesa di {wait_time} secondi prima del prossimo tentativo...")
+                time.sleep(wait_time)
+            else:
+                print("[-] Superato il numero massimo di tentativi.")
+                raise e
+
 def main():
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
     blog_id = os.environ.get("BLOGGER_BLOG_ID")
@@ -66,7 +94,6 @@ def main():
         9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
     }
     today_formatted = f"{today.day} {mesi[today.month]} {today.year}"
-    today_str = today.strftime("%d/%m/%Y")
 
     sys_instruction = (
         "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
@@ -96,16 +123,8 @@ def main():
     6. <h2>Economia & Mercati</h2> (Icona: 📈) - Dati economici, fisco, lavoro, imprese e andamento dei mercati finanziari.
     """
 
-    print("Elaborazione rassegna tematica con Gemini 3.8...")
-    response = gemini_client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=sys_instruction,
-            temperature=0.3
-        )
-    )
-    raw_html = response.text
+    # Esegue la chiamata protetta da retry
+    raw_html = generate_with_retry(gemini_client, prompt, sys_instruction)
 
     lines = raw_html.strip().split("\n")
     post_title = f"Rassegna Stampa del {today_formatted}"
@@ -237,7 +256,7 @@ def main():
   }},
   "publisher": {{
     "@type": "Organization",
-    "name": "brunorachiele.it",
+    "name": "Bruno Rachiele",
     "url": "https://brunorachiele.it"
   }}
 }}
