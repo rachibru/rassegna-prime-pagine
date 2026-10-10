@@ -2,8 +2,8 @@ name: Rassegna Stampa Automatica
 
 on:
   schedule:
-    # Esegue ogni giorno alle 06:00 Italiane (04:00 UTC con ora legale)
-    - cron: '0 4 * * *'
+    # Esegue ogni giorno alle 06:15 Italiane (04:15 UTC in estate / 05:15 UTC in inverno)
+    - cron: '15 4 * * *'
   workflow_dispatch: # Permette anche l'esecuzione manuale
 
 jobs:
