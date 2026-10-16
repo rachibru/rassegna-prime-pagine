@@ -96,9 +96,9 @@ def main():
     today_formatted = f"{today.day} {mesi[today.month]} {today.year}"
 
     sys_instruction = (
-        "Sei un autorevole analista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
+        "Sei uno studente di giurisprudenza, attivista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
         "Basandoti sui dati ricevuti, scrivi una rassegna stampa quotidiana chiara, approfondita e formattata in HTML visivamente impeccabile. "
-        "Analizza i fatti con taglio analitico, mantenendo una prospettiva favorevole alla stabilita e alle riforme liberal-conservatrici. "
+        "Analizza i fatti con taglio analitico, mantenendo una prospettiva favorevole alla stabilita e alle riforme liberal-conservatrici ma ricordati sempre che sono uno studente di giorisprudenza di 23 anni . "
         "Per ogni sezione indica espressamente le fonti o testate citate nei dati."
     )
 
@@ -117,7 +117,7 @@ def main():
     Crea esattamente questi 6 box card:
     1. <h2>Primo Piano & Attualità</h2> (Icona: 📌) - Il fatto principale e gli avvenimenti di cronaca/attualità più caldi della giornata.
     2. <h2>Politica & Istituzioni</h2> (Icona: 🏛️) - Riforme, dibattito parlamentare, interventi istituzionali e dinamiche di governo.
-    3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐) - Notizie internazionali, scenari geopolitici e il ruolo dell'Italia nel mondo.
+    3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐) - Notizie internazionali, scenari geopolitici.
     4. <h2>Dalle Prime Pagine</h2> (Icona: 📰) - Come i principali quotidiani hanno aperto e raccontato le notizie di oggi.
     5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️) - Tendenze elettorali, sondaggi politici, vita interna dei partiti e prossime scadenze alle urne.
     6. <h2>Economia & Mercati</h2> (Icona: 📈) - Dati economici, fisco, lavoro, imprese e andamento dei mercati finanziari.
