@@ -4,16 +4,31 @@ import time
 import datetime
 import urllib.parse
 import feedparser
+import requests
 from google import genai
 from google.genai import types
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
 
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
+def get_blogger_access_token(client_id, client_secret, refresh_token):
+    """Ottiene un nuovo Access Token per Blogger direttamente via HTTP POST, evitando librerie OAuth complesse."""
+    print("Richiesta token di accesso a Google OAuth 2.0...")
+    url = "https://oauth2.googleapis.com/token"
+    payload = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token"
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        raise RuntimeError(f"Errore OAuth Google: {response.status_code} - {response.text}")
+    
+    token_data = response.json()
+    return token_data.get("access_token")
+
 def fetch_live_news_rss():
-    """Recupera notizie reali e freschissime tramite i Feed RSS di Google News Italia."""
+    """Recupera notizie reali tramite i Feed RSS di Google News Italia."""
     print("Estrazione notizie in tempo reale tramite Google News RSS...")
     
     topics = {
@@ -44,16 +59,16 @@ def fetch_live_news_rss():
         except Exception as e:
             print(f"[-] Errore nel recupero RSS per {category}: {e}")
 
-    print(f"[+] Totale notizie reali e fresche estratte oggi: {total_found}")
+    print(f"[+] Totale notizie reali estratte oggi: {total_found}")
     return news_text
 
 def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
-    """Chiamata robusta con retry automatico per gestire eventuali 503/429 di Gemini."""
+    """Chiamata robusta con retry per Gemini API."""
     for attempt in range(1, max_retries + 1):
         try:
             print(f"Tentativo {attempt}/{max_retries}: Generazione rassegna con Gemini...")
             response = gemini_client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction,
@@ -64,27 +79,73 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
         except Exception as e:
             print(f"[-] Errore al tentativo {attempt}: {e}")
             if attempt < max_retries:
-                wait_time = attempt * 15
-                print(f"[!] Attesa di {wait_time} secondi prima del prossimo tentativo...")
+                wait_time = attempt * 10
                 time.sleep(wait_time)
             else:
                 raise e
 
+def publish_to_blogger(blog_id, access_token, title, html_content):
+    """Pubblica il post su Blogger tramite API REST v3."""
+    print("Pubblicazione post su Blogger...")
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts/"
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "title": title,
+        "content": html_content,
+        "labels": ["Rassegna Stampa"]
+    }
+    
+    res = requests.post(url, headers=headers, json=payload)
+    if res.status_code != 200:
+        raise RuntimeError(f"Errore pubblicazione Blogger: {res.status_code} - {res.text}")
+    
+    post_data = res.json()
+    post_id = post_data.get("id")
+    post_url = post_data.get("url")
+    print(f"[SUCCESS] Post pubblicato! ID: {post_id} - URL: {post_url}")
+    return post_id, post_url
+
+def update_blogger_post(blog_id, post_id, access_token, title, updated_html):
+    """Aggiorna il post con lo script Schema.org incluso."""
+    print("Aggiornamento post con metadata Schema.org...")
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts/{post_id}"
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "title": title,
+        "content": updated_html,
+        "labels": ["Rassegna Stampa"]
+    }
+    
+    res = requests.patch(url, headers=headers, json=payload)
+    if res.status_code != 200:
+        print(f"[-] Avviso aggiornamento metadata: {res.status_code} - {res.text}")
+    else:
+        print("[SUCCESS] Metadata Schema.org aggiunti con successo!")
+
 def main():
-    gemini_api_key = os.environ.get("GEMINI_API_KEY")
-    blog_id = os.environ.get("BLOGGER_BLOG_ID")
-    client_id = os.environ.get("BLOGGER_CLIENT_ID")
-    client_secret = os.environ.get("BLOGGER_CLIENT_SECRET")
-    refresh_token = os.environ.get("BLOGGER_REFRESH_TOKEN")
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip().strip("[").strip("]")
+    blog_id = os.environ.get("BLOGGER_BLOG_ID", "").strip().strip("[").strip("]")
+    client_id = os.environ.get("BLOGGER_CLIENT_ID", "").strip().strip("[").strip("]")
+    client_secret = os.environ.get("BLOGGER_CLIENT_SECRET", "").strip().strip("[").strip("]")
+    refresh_token = os.environ.get("BLOGGER_REFRESH_TOKEN", "").strip().strip("[").strip("]")
 
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
-    # Sanificazione automatica di sicurezza
-    client_id = client_id.strip().strip("[").strip("]")
-    client_secret = client_secret.strip().strip("[").strip("]")
-    refresh_token = refresh_token.strip().strip("[").strip("]")
+    # 1. Ottieni il token di accesso
+    access_token = get_blogger_access_token(client_id, client_secret, refresh_token)
 
+    # 2. Estrai notizie fresche
     live_news_context = fetch_live_news_rss()
     
     today = datetime.date.today()
@@ -95,6 +156,7 @@ def main():
     }
     today_formatted = f"{today.day} {mesi[today.month]} {today.year}"
 
+    # 3. Generazione AI
     gemini_client = genai.Client(api_key=gemini_api_key)
 
     sys_instruction = (
@@ -110,7 +172,7 @@ def main():
 
     REGOLE TASSATIVE PER IL TITOLO:
     - La primissima riga dell'output DEVE essere il titolo racchiuso dentro <h1>...</h1>.
-    - Il titolo DEVE essere unico, giornalistico e citare espressamente i 2 o 3 fatti principali di OGGI (es. i temi di politica o esteri emersi nelle notizie).
+    - Il titolo DEVE essere unico, giornalistico e citare espressamente i 2 o 3 fatti principali di OGGI.
     - NON USARE MAI un titolo generico come solo "Rassegna Stampa del {today_formatted}".
 
     STRUTTURA OBBLIGATORIA DELLE SEZIONI (Formattazione HTML):
@@ -128,11 +190,10 @@ def main():
 
     raw_html = generate_with_retry(gemini_client, prompt, sys_instruction)
 
-    # Pulizia blocchi markdown ```html
+    # Clean HTML
     cleaned_html = re.sub(r"^```html\s*", "", raw_html, flags=re.IGNORECASE)
     cleaned_html = re.sub(r"\s*```$", "", cleaned_html).strip()
 
-    # Estrazione flessibile del titolo dall'<h1>
     h1_match = re.search(r"<h1>(.*?)</h1>", cleaned_html, re.IGNORECASE | re.DOTALL)
 
     if h1_match:
@@ -201,40 +262,15 @@ def main():
 </div>
 """
 
-    creds = Credentials(
-        token=None,
-        refresh_token=refresh_token,
-        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
-        client_id=client_id,
-        client_secret=client_secret,
-        scopes=["[https://www.googleapis.com/auth/blogger](https://www.googleapis.com/auth/blogger)"]
-    )
+    # 4. Pubblica su Blogger
+    post_id, post_url = publish_to_blogger(blog_id, access_token, post_title, final_article_html)
 
-    if not creds.valid:
-        creds.refresh(Request())
-
-    blogger_service = build("blogger", "v3", credentials=creds)
-
-    body_initial = {
-        "title": post_title,
-        "content": final_article_html,
-        "labels": ["Rassegna Stampa"]
-    }
-
-    published_post = blogger_service.posts().insert(
-        blogId=blog_id,
-        body=body_initial,
-        isDraft=False
-    ).execute()
-
-    post_id = published_post.get("id")
-    post_url = published_post.get("url")
-
+    # 5. Schema.org update
     iso_date = datetime.datetime.now().isoformat()
     schema_org_script = f"""
 <script type="application/ld+json">
 {{
-  "@context": "[https://schema.org](https://schema.org)",
+  "@context": "https://schema.org",
   "@type": "NewsArticle",
   "mainEntityOfPage": {{
     "@type": "WebPage",
@@ -246,32 +282,18 @@ def main():
   "author": {{
     "@type": "Person",
     "name": "Bruno Rachiele",
-    "url": "[https://bio.brunorachiele.it](https://bio.brunorachiele.it)"
+    "url": "https://bio.brunorachiele.it"
   }},
   "publisher": {{
     "@type": "Organization",
     "name": "brunorachiele.it",
-    "url": "[https://www.brunorachiele.it](https://www.brunorachiele.it)"
+    "url": "https://www.brunorachiele.it"
   }}
 }}
 </script>
 """
-
     updated_html = final_article_html + "\n" + schema_org_script
-
-    body_update = {
-        "title": post_title,
-        "content": updated_html,
-        "labels": ["Rassegna Stampa"]
-    }
-
-    blogger_service.posts().patch(
-        blogId=blog_id,
-        postId=post_id,
-        body=body_update
-    ).execute()
-
-    print(f"[SUCCESS] Pubblicato con successo! Titolo: '{post_title}' - URL: {post_url}")
+    update_blogger_post(blog_id, post_id, access_token, post_title, updated_html)
 
 if __name__ == "__main__":
     main()
