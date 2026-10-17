@@ -11,41 +11,44 @@ from googleapiclient.discovery import build
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
 def fetch_live_news():
-    """Recupera notizie reali di OGGI divise per le macro-aree tematiche richieste."""
-    print("Ricerca notizie live per temi (Politica, Esteri, Economia, Elezioni, Giornali)...")
-    ddgs = DDGS()
-    
-    today = datetime.date.today()
-    mesi = {
-        1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
-        5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
-        9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
-    }
-    date_query = f"{today.day} {mesi[today.month]}"
+    """Recupera notizie REALI delle ultime 24 ore divise per macro-aree."""
+    print("Ricerca notizie live per temi (Politica, Esteri, Economia)...")
     
     queries = {
-        "POLITICA ED ELEZIONI": f"politica italia elezioni sondaggi parlamento {date_query}",
-        "ESTERI ED ATTUALITA": f"esteri geopolitica mondo notizie attualita {date_query}",
-        "ECONOMIA E GIORNALI": f"economia fisco mercati lavoro prime pagine giornali {date_query}"
+        "POLITICA ED ELEZIONI": "politica italia governo parlamentari elezioni sondaggi",
+        "ESTERI ED ATTUALITA": "notizie esteri geopolitica mondo attualita",
+        "ECONOMIA E GIORNALI": "economia fisco mercati lavoro prime pagine giornali"
     }
     
     news_text = ""
+    total_found = 0
+    
     for category, q in queries.items():
         news_text += f"\n--- {category} DI OGGI ---\n"
         try:
-            results = ddgs.news(keywords=q, region="it-it", safesearch="off", max_results=5)
-            for idx, r in enumerate(results, 1):
-                source = r.get("source", "Testata Giornalistica")
-                title = r.get("title", "")
-                body = r.get("body", "")
-                news_text += f"{idx}. [{source}] {title}: {body}\n"
+            # timelimit='d' recupera SOLO le notizie del giorno (ultime 24h)
+            with DDGS() as ddgs:
+                results = list(ddgs.news(keywords=q, region="it-it", safesearch="off", timelimit="d", max_results=5))
+                
+                # Se la sezione news non trova nulla, prova la ricerca generale recente
+                if not results:
+                    results = list(ddgs.text(keywords=q, region="it-it", safesearch="off", timelimit="d", max_results=5))
+                
+                for idx, r in enumerate(results, 1):
+                    source = r.get("source", r.get("href", "Fonte Web"))
+                    title = r.get("title", "")
+                    body = r.get("body", "")
+                    if title:
+                        news_text += f"{idx}. [{source}] {title}: {body}\n"
+                        total_found += 1
         except Exception as e:
             print(f"[-] Errore durante la ricerca per {category}: {e}")
-            
+
+    print(f"[+] Totale notizie reali estratte oggi: {total_found}")
     return news_text
 
 def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
-    """Chiamata robusta con retry automatico e temperatura alzata a 0.7 per titoli unici."""
+    """Chiamata robusta a Gemini con retry automatico."""
     for attempt in range(1, max_retries + 1):
         try:
             print(f"Tentativo {attempt}/{max_retries}: Elaborazione rassegna con Gemini...")
@@ -59,15 +62,12 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
             )
             return response.text
         except Exception as e:
-            err_str = str(e)
-            print(f"[-] Errore al tentativo {attempt}: {err_str}")
-            
+            print(f"[-] Errore al tentativo {attempt}: {e}")
             if attempt < max_retries:
                 wait_time = attempt * 15
-                print(f"[!] Attesa di {wait_time} secondi prima del prossimo tentativo...")
+                print(f"[!] Attesa di {wait_time} secondi prima di riprovare...")
                 time.sleep(wait_time)
             else:
-                print("[-] Superato il numero massimo di tentativi.")
                 raise e
 
 def main():
@@ -81,9 +81,6 @@ def main():
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
     live_news_context = fetch_live_news()
-    print("[+] Notizie tematiche estratte con successo.")
-
-    gemini_client = genai.Client(api_key=gemini_api_key)
     
     today = datetime.date.today()
     mesi = {
@@ -93,51 +90,51 @@ def main():
     }
     today_formatted = f"{today.day} {mesi[today.month]} {today.year}"
 
+    gemini_client = genai.Client(api_key=gemini_api_key)
+
     sys_instruction = (
-        "Sei uno studente di giurisprudenza, attivista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
-        "Basandoti sui dati ricevuti, scrivi una rassegna stampa quotidiana chiara, approfondita e formattata in HTML visivamente impeccabile. "
-        "Analizza i fatti con taglio analitico, mantenendo una prospettiva favorevole alla stabilità e alle riforme liberal-conservatrici (hai 23 anni). "
-        "Per ogni sezione indica espressamente le fonti o testate citate nei dati."
+        "Sei uno studente di giurisprudenza di 23 anni, attivista politico e giornalista di orientamento liberal-conservatore. "
+        "Scrivi una rassegna stampa basandoti TASSATIVAMENTE sui fatti e le notizie REALI forniti nel contesto. "
+        "Sii analitico, incisivo e orientato alle riforme e alla stabilità politica."
     )
 
     prompt = f"""
-    Ecco i fatti e le notizie REALI estratte per la giornata di OGGI ({today_formatted}):
+    OGGI È IL {today_formatted}.
+    Ecco l'elenco delle NOTIZIE REALI estratte dai giornali e dalle agenzie di stampa nelle ultime 24 ore:
     {live_news_context}
 
-    INSTRUZIONI FONDAMENTALI SUL TITOLO:
-    - La primissima riga in assoluto DEVE essere il titolo principale della rassegna dentro <h1>...</h1>.
-    - Il titolo DEVE essere giornalistico, incisivo, dinamico e UNICO, basato sul fatto principale/notizia di copertina di OGGI.
-    - ESEMPIO DI TITOLO CORRETTO: <h1>Rassegna Stampa: Scontro sulla Manovra e Tensione in Medio Oriente ({today_formatted})</h1>
-    - EVITA titoli generici come solo "Rassegna Stampa del {today_formatted}".
+    REGOLE TASSATIVE PER IL TITOLO:
+    - La primissima riga dell'output DEVE essere il titolo racchiuso dentro <h1>...</h1>.
+    - Il titolo DEVE citare espressamente i 2 o 3 fatti o temi PRINCIPALI presenti nelle notizie reali di oggi.
+    - NON USARE MAI un titolo generico come "Rassegna Stampa del {today_formatted}".
+    - ESEMPIO CORRETTO: <h1>Rassegna Stampa del {today_formatted}: Scontro sulla Manovra, Tensioni in Medio Oriente e Sondaggi Partiti</h1>
 
-    STRUTTURA OBBLIGATORIA DELLE SEZIONI HTML:
-    Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML stilizzato. 
-    OGNI BOX DEVE INCLUDERE IN FONDO IL TAG <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>.
-
-    Crea esattamente questi 6 box card:
+    STRUTTURA OBBLIGATORIA DELLE SEZIONI (Formattazione HTML):
+    Organizza la rassegna in 6 card HTML stilizzate per questi temi:
     1. <h2>Primo Piano & Attualità</h2> (Icona: 📌)
     2. <h2>Politica & Istituzioni</h2> (Icona: 🏛️)
     3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐)
     4. <h2>Dalle Prime Pagine</h2> (Icona: 📰)
     5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️)
     6. <h2>Economia & Mercati</h2> (Icona: 📈)
+
+    In fondo ad ogni card inserisci: <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>
     """
 
     raw_html = generate_with_retry(gemini_client, prompt, sys_instruction)
 
-    # Pulizia dai blocchi code markdown se presenti nell'output di Gemini
+    # Pulizia dai blocchi markdown ```html
     cleaned_html = re.sub(r"^```html\s*", "", raw_html, flags=re.IGNORECASE)
-    cleaned_html = re.sub(r"\s*```$", "", cleaned_html)
+    cleaned_html = re.sub(r"\s*```$", "", cleaned_html).strip()
 
-    # Estrazione robusta dell'<h1> tramite regex
+    # Estrazione flessibile del titolo dall'<h1>
     h1_match = re.search(r"<h1>(.*?)</h1>", cleaned_html, re.IGNORECASE | re.DOTALL)
 
     if h1_match:
         post_title = h1_match.group(1).strip()
-        # Rimuove il tag h1 dal corpo dato che lo mettiamo altrove o lo gestisce il tema di Blogger
         body_content = re.sub(r"<h1>.*?</h1>", "", cleaned_html, count=1, flags=re.IGNORECASE | re.DOTALL).strip()
     else:
-        post_title = f"Rassegna Stampa del {today_formatted}"
+        post_title = f"Rassegna Stampa del {today_formatted}: Le Notizie di Oggi"
         body_content = cleaned_html
 
     custom_css = """
@@ -167,24 +164,11 @@ def main():
     margin-bottom: 24px;
     padding: 20px 24px;
   }
-  .card-header {
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid #f0f4f8;
-    padding-bottom: 10px;
-    margin-bottom: 14px;
-  }
-  .card-icon {
-    font-size: 1.4rem;
-    margin-right: 10px;
-  }
   .card-header h2 {
     font-size: 1.25rem !important;
     color: #1a365d !important;
     margin: 0 !important;
-    padding: 0 !important;
     font-weight: 700 !important;
-    border: none !important;
   }
   .card-body p {
     font-size: 1.02rem;
@@ -193,15 +177,13 @@ def main():
   }
   .card-source {
     margin-top: 15px;
-    padding-top: 10px;
-    border-top: 1px dashed #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 6px;
     font-size: 0.88rem;
     font-weight: 600;
     color: #2b6cb0;
-    display: inline-block;
     background: #ebf8ff;
-    padding: 6px 12px;
-    border-radius: 6px;
+    display: inline-block;
   }
 </style>
 """
@@ -217,10 +199,10 @@ def main():
     creds = Credentials(
         token=None,
         refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
+        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
         client_id=client_id,
         client_secret=client_secret,
-        scopes=["https://www.googleapis.com/auth/blogger"]
+        scopes=["[https://www.googleapis.com/auth/blogger](https://www.googleapis.com/auth/blogger)"]
     )
 
     blogger_service = build("blogger", "v3", credentials=creds)
@@ -244,7 +226,7 @@ def main():
     schema_org_script = f"""
 <script type="application/ld+json">
 {{
-  "@context": "https://schema.org",
+  "@context": "[https://schema.org](https://schema.org)",
   "@type": "NewsArticle",
   "mainEntityOfPage": {{
     "@type": "WebPage",
@@ -256,12 +238,12 @@ def main():
   "author": {{
     "@type": "Person",
     "name": "Bruno Rachiele",
-    "url": "https://www.bio.brunorachiele.it"
+    "url": "[https://www.bio.brunorachiele.it](https://www.bio.brunorachiele.it)"
   }},
   "publisher": {{
     "@type": "Organization",
     "name": "Bruno Rachiele",
-    "url": "https://brunorachiele.it"
+    "url": "[https://brunorachiele.it](https://brunorachiele.it)"
   }}
 }}
 </script>
@@ -281,7 +263,7 @@ def main():
         body=body_update
     ).execute()
 
-    print(f"[SUCCESS] Rassegna pubblicata con titolo unico: '{post_title}'! URL: {post_url}")
+    print(f"[SUCCESS] Pubblicata con successo con Titolo: '{post_title}'! URL: {post_url}")
 
 if __name__ == "__main__":
     main()
