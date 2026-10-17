@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import datetime
 from duckduckgo_search import DDGS
@@ -44,16 +45,16 @@ def fetch_live_news():
     return news_text
 
 def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
-    """Chiamata robusta con retry automatico per 503 UNAVAILABLE e 429 RATE LIMIT."""
+    """Chiamata robusta con retry automatico e temperatura alzata a 0.7 per titoli unici."""
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"Tentativo {attempt}/{max_retries}: Elaborazione rassegna con Gemini 3.8...")
+            print(f"Tentativo {attempt}/{max_retries}: Elaborazione rassegna con Gemini...")
             response = gemini_client.models.generate_content(
                 model="gemini-3.8-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction,
-                    temperature=0.3
+                    temperature=0.7
                 )
             )
             return response.text
@@ -62,9 +63,8 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
             print(f"[-] Errore al tentativo {attempt}: {err_str}")
             
             if attempt < max_retries:
-                # Se è un 503 (server occupato) o 429 (troppe richieste), attende prima di riprovare
-                wait_time = attempt * 15  # Attende 15s, 30s, 45s, 60s...
-                print(f"[!] Server occupato o limite raggiunto. Attesa di {wait_time} secondi prima del prossimo tentativo...")
+                wait_time = attempt * 15
+                print(f"[!] Attesa di {wait_time} secondi prima del prossimo tentativo...")
                 time.sleep(wait_time)
             else:
                 print("[-] Superato il numero massimo di tentativi.")
@@ -80,11 +80,9 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
-    # 1. Recupera le notizie tematiche di oggi
     live_news_context = fetch_live_news()
     print("[+] Notizie tematiche estratte con successo.")
 
-    # 2. Inizializza Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
     
     today = datetime.date.today()
@@ -98,7 +96,7 @@ def main():
     sys_instruction = (
         "Sei uno studente di giurisprudenza, attivista politico e giornalista di orientamento liberal-conservatore e di centro-destra. "
         "Basandoti sui dati ricevuti, scrivi una rassegna stampa quotidiana chiara, approfondita e formattata in HTML visivamente impeccabile. "
-        "Analizza i fatti con taglio analitico, mantenendo una prospettiva favorevole alla stabilita e alle riforme liberal-conservatrici ma ricordati sempre che sono uno studente di giorisprudenza di 23 anni . "
+        "Analizza i fatti con taglio analitico, mantenendo una prospettiva favorevole alla stabilità e alle riforme liberal-conservatrici (hai 23 anni). "
         "Per ogni sezione indica espressamente le fonti o testate citate nei dati."
     )
 
@@ -106,35 +104,41 @@ def main():
     Ecco i fatti e le notizie REALI estratte per la giornata di OGGI ({today_formatted}):
     {live_news_context}
 
-    Componi la rassegna organizzando il contenuto RIGOROSAMENTE in queste 6 macro-aree tematiche:
+    INSTRUZIONI FONDAMENTALI SUL TITOLO:
+    - La primissima riga in assoluto DEVE essere il titolo principale della rassegna dentro <h1>...</h1>.
+    - Il titolo DEVE essere giornalistico, incisivo, dinamico e UNICO, basato sul fatto principale/notizia di copertina di OGGI.
+    - ESEMPIO DI TITOLO CORRETTO: <h1>Rassegna Stampa: Scontro sulla Manovra e Tensione in Medio Oriente ({today_formatted})</h1>
+    - EVITA titoli generici come solo "Rassegna Stampa del {today_formatted}".
 
-    STRUTTURA OBBLIGATORIA DELLE SEZIONI:
-    - La primissima riga in assoluto deve essere solo il titolo principale racchiuso in <h1>TITOLO</h1> (es. <h1>Rassegna Stampa del {today_formatted}: Titolo del fatto principale</h1>).
-    
+    STRUTTURA OBBLIGATORIA DELLE SEZIONI HTML:
     Per ogni sezione successiva, racchiudi il contenuto all'interno di un box card HTML stilizzato. 
     OGNI BOX DEVE INCLUDERE IN FONDO IL TAG <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>.
 
     Crea esattamente questi 6 box card:
-    1. <h2>Primo Piano & Attualità</h2> (Icona: 📌) - Il fatto principale e gli avvenimenti di cronaca/attualità più caldi della giornata.
-    2. <h2>Politica & Istituzioni</h2> (Icona: 🏛️) - Riforme, dibattito parlamentare, interventi istituzionali e dinamiche di governo.
-    3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐) - Notizie internazionali, scenari geopolitici.
-    4. <h2>Dalle Prime Pagine</h2> (Icona: 📰) - Come i principali quotidiani hanno aperto e raccontato le notizie di oggi.
-    5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️) - Tendenze elettorali, sondaggi politici, vita interna dei partiti e prossime scadenze alle urne.
-    6. <h2>Economia & Mercati</h2> (Icona: 📈) - Dati economici, fisco, lavoro, imprese e andamento dei mercati finanziari.
+    1. <h2>Primo Piano & Attualità</h2> (Icona: 📌)
+    2. <h2>Politica & Istituzioni</h2> (Icona: 🏛️)
+    3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐)
+    4. <h2>Dalle Prime Pagine</h2> (Icona: 📰)
+    5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️)
+    6. <h2>Economia & Mercati</h2> (Icona: 📈)
     """
 
-    # Esegue la chiamata protetta da retry
     raw_html = generate_with_retry(gemini_client, prompt, sys_instruction)
 
-    lines = raw_html.strip().split("\n")
-    post_title = f"Rassegna Stampa del {today_formatted}"
-    body_content = raw_html
+    # Pulizia dai blocchi code markdown se presenti nell'output di Gemini
+    cleaned_html = re.sub(r"^```html\s*", "", raw_html, flags=re.IGNORECASE)
+    cleaned_html = re.sub(r"\s*```$", "", cleaned_html)
 
-    for line in lines:
-        if "<h1>" in line and "</h1>" in line:
-            post_title = line.replace("<h1>", "").replace("</h1>", "").strip()
-            body_content = raw_html.replace(line, "").strip()
-            break
+    # Estrazione robusta dell'<h1> tramite regex
+    h1_match = re.search(r"<h1>(.*?)</h1>", cleaned_html, re.IGNORECASE | re.DOTALL)
+
+    if h1_match:
+        post_title = h1_match.group(1).strip()
+        # Rimuove il tag h1 dal corpo dato che lo mettiamo altrove o lo gestisce il tema di Blogger
+        body_content = re.sub(r"<h1>.*?</h1>", "", cleaned_html, count=1, flags=re.IGNORECASE | re.DOTALL).strip()
+    else:
+        post_title = f"Rassegna Stampa del {today_formatted}"
+        body_content = cleaned_html
 
     custom_css = """
 <style>
@@ -277,7 +281,7 @@ def main():
         body=body_update
     ).execute()
 
-    print(f"[SUCCESS] Rassegna tematica pubblicata con successo! URL: {post_url}")
+    print(f"[SUCCESS] Rassegna pubblicata con titolo unico: '{post_title}'! URL: {post_url}")
 
 if __name__ == "__main__":
     main()
