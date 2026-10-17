@@ -2,7 +2,8 @@ import os
 import re
 import time
 import datetime
-from duckduckgo_search import DDGS
+import urllib.parse
+import feedparser
 from google import genai
 from google.genai import types
 from google.oauth2.credentials import Credentials
@@ -10,48 +11,49 @@ from googleapiclient.discovery import build
 
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
-def fetch_live_news():
-    """Recupera notizie REALI delle ultime 24 ore divise per macro-aree."""
-    print("Ricerca notizie live per temi (Politica, Esteri, Economia)...")
+def fetch_live_news_rss():
+    """Recupera notizie reali e freschissime tramite i Feed RSS di Google News Italia."""
+    print("Estrazione notizie in tempo reale tramite Google News RSS...")
     
-    queries = {
-        "POLITICA ED ELEZIONI": "politica italia governo parlamentari elezioni sondaggi",
-        "ESTERI ED ATTUALITA": "notizie esteri geopolitica mondo attualita",
-        "ECONOMIA E GIORNALI": "economia fisco mercati lavoro prime pagine giornali"
+    topics = {
+        "POLITICA ED ELEZIONI": "politica+italia+governo+parlamento+sondaggi",
+        "ESTERI ED ATTUALITA": "esteri+geopolitica+mondo+attualita",
+        "ECONOMIA E GIORNALI": "economia+fisco+mercati+lavoro+giornali"
     }
     
     news_text = ""
     total_found = 0
     
-    for category, q in queries.items():
+    for category, query in topics.items():
         news_text += f"\n--- {category} DI OGGI ---\n"
+        encoded_query = urllib.parse.quote(query)
+        # Feed RSS ufficiale di Google News Italia filtrato per lingua italiana e regione IT
+        rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=it&gl=IT&ceid=IT:it"
+        
         try:
-            # timelimit='d' recupera SOLO le notizie del giorno (ultime 24h)
-            with DDGS() as ddgs:
-                results = list(ddgs.news(keywords=q, region="it-it", safesearch="off", timelimit="d", max_results=5))
+            feed = feedparser.parse(rss_url)
+            # Prende le prime 6 notizie più recenti per categoria
+            entries = feed.entries[:6]
+            for idx, entry in enumerate(entries, 1):
+                title = entry.get("title", "")
+                # Estrae il nome della testata (es. 'ANSA.it', 'Corriere della Sera')
+                source = entry.get("source", {}).get("title", "Testata Giornalistica")
+                published = entry.get("published", "")
                 
-                # Se la sezione news non trova nulla, prova la ricerca generale recente
-                if not results:
-                    results = list(ddgs.text(keywords=q, region="it-it", safesearch="off", timelimit="d", max_results=5))
-                
-                for idx, r in enumerate(results, 1):
-                    source = r.get("source", r.get("href", "Fonte Web"))
-                    title = r.get("title", "")
-                    body = r.get("body", "")
-                    if title:
-                        news_text += f"{idx}. [{source}] {title}: {body}\n"
-                        total_found += 1
+                if title:
+                    news_text += f"{idx}. [{source}] {title} (Pubblicato: {published})\n"
+                    total_found += 1
         except Exception as e:
-            print(f"[-] Errore durante la ricerca per {category}: {e}")
+            print(f"[-] Errore nel recupero RSS per {category}: {e}")
 
-    print(f"[+] Totale notizie reali estratte oggi: {total_found}")
+    print(f"[+] Totale notizie reali e fresche estratte oggi: {total_found}")
     return news_text
 
 def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
-    """Chiamata robusta a Gemini con retry automatico."""
+    """Chiamata robusta con retry automatico per gestire eventuali 503/429 di Gemini."""
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"Tentativo {attempt}/{max_retries}: Elaborazione rassegna con Gemini...")
+            print(f"Tentativo {attempt}/{max_retries}: Generazione rassegna con Gemini...")
             response = gemini_client.models.generate_content(
                 model="gemini-3.8-flash",
                 contents=prompt,
@@ -65,7 +67,7 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
             print(f"[-] Errore al tentativo {attempt}: {e}")
             if attempt < max_retries:
                 wait_time = attempt * 15
-                print(f"[!] Attesa di {wait_time} secondi prima di riprovare...")
+                print(f"[!] Attesa di {wait_time} secondi prima del prossimo tentativo...")
                 time.sleep(wait_time)
             else:
                 raise e
@@ -80,7 +82,7 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
-    live_news_context = fetch_live_news()
+    live_news_context = fetch_live_news_rss()
     
     today = datetime.date.today()
     mesi = {
@@ -100,14 +102,13 @@ def main():
 
     prompt = f"""
     OGGI È IL {today_formatted}.
-    Ecco l'elenco delle NOTIZIE REALI estratte dai giornali e dalle agenzie di stampa nelle ultime 24 ore:
+    Ecco l'elenco delle NOTIZIE REALI estratte dai giornali e dalle agenzie di stampa per oggi:
     {live_news_context}
 
     REGOLE TASSATIVE PER IL TITOLO:
     - La primissima riga dell'output DEVE essere il titolo racchiuso dentro <h1>...</h1>.
-    - Il titolo DEVE citare espressamente i 2 o 3 fatti o temi PRINCIPALI presenti nelle notizie reali di oggi.
-    - NON USARE MAI un titolo generico come "Rassegna Stampa del {today_formatted}".
-    - ESEMPIO CORRETTO: <h1>Rassegna Stampa del {today_formatted}: Scontro sulla Manovra, Tensioni in Medio Oriente e Sondaggi Partiti</h1>
+    - Il titolo DEVE essere unico, giornalistico e citare espressamente i 2 o 3 fatti principali di OGGI (es. i temi di politica o esteri emersi nelle notizie).
+    - NON USARE MAI un titolo generico come solo "Rassegna Stampa del {today_formatted}".
 
     STRUTTURA OBBLIGATORIA DELLE SEZIONI (Formattazione HTML):
     Organizza la rassegna in 6 card HTML stilizzate per questi temi:
@@ -118,12 +119,13 @@ def main():
     5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️)
     6. <h2>Economia & Mercati</h2> (Icona: 📈)
 
-    In fondo ad ogni card inserisci: <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>
+    In fondo ad ogni card inserisci il tag con la fonte reale citata nei dati:
+    <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>
     """
 
     raw_html = generate_with_retry(gemini_client, prompt, sys_instruction)
 
-    # Pulizia dai blocchi markdown ```html
+    # Pulizia blocchi markdown ```html
     cleaned_html = re.sub(r"^```html\s*", "", raw_html, flags=re.IGNORECASE)
     cleaned_html = re.sub(r"\s*```$", "", cleaned_html).strip()
 
@@ -238,12 +240,12 @@ def main():
   "author": {{
     "@type": "Person",
     "name": "Bruno Rachiele",
-    "url": "[https://www.bio.brunorachiele.it](https://www.bio.brunorachiele.it)"
+    "url": "[https://bio.brunorachiele.it"
   }},
   "publisher": {{
     "@type": "Organization",
-    "name": "Bruno Rachiele",
-    "url": "[https://brunorachiele.it](https://brunorachiele.it)"
+    "name": "brunorachiele.it",
+    "url": "[https://www.brunorachiele.it"
   }}
 }}
 </script>
@@ -263,7 +265,7 @@ def main():
         body=body_update
     ).execute()
 
-    print(f"[SUCCESS] Pubblicata con successo con Titolo: '{post_title}'! URL: {post_url}")
+    print(f"[SUCCESS] Pubblicato con successo! Titolo: '{post_title}' - URL: {post_url}")
 
 if __name__ == "__main__":
     main()
