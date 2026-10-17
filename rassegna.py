@@ -80,7 +80,7 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
 
-    # Sanificazione automatica da spazi o parentesi residue
+    # Sanificazione automatica di sicurezza
     client_id = client_id.strip().strip("[").strip("]")
     client_secret = client_secret.strip().strip("[").strip("]")
     refresh_token = refresh_token.strip().strip("[").strip("]")
