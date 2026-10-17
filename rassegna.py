@@ -7,6 +7,7 @@ import feedparser
 from google import genai
 from google.genai import types
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
@@ -78,6 +79,11 @@ def main():
 
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Tutti i secret devono essere configurati su GitHub.")
+
+    # Sanificazione automatica da spazi o parentesi residue
+    client_id = client_id.strip().strip("[").strip("]")
+    client_secret = client_secret.strip().strip("[").strip("]")
+    refresh_token = refresh_token.strip().strip("[").strip("]")
 
     live_news_context = fetch_live_news_rss()
     
@@ -195,7 +201,6 @@ def main():
 </div>
 """
 
-    # CREDENZIALI CORRETTE SENZA FORMATTAZIONE MARKDOWN
     creds = Credentials(
         token=None,
         refresh_token=refresh_token,
@@ -204,6 +209,9 @@ def main():
         client_secret=client_secret,
         scopes=["[https://www.googleapis.com/auth/blogger](https://www.googleapis.com/auth/blogger)"]
     )
+
+    if not creds.valid:
+        creds.refresh(Request())
 
     blogger_service = build("blogger", "v3", credentials=creds)
 
@@ -223,8 +231,6 @@ def main():
     post_url = published_post.get("url")
 
     iso_date = datetime.datetime.now().isoformat()
-    
-    # SCHEMA.ORG CORRETTO SENZA FORMATTAZIONE MARKDOWN
     schema_org_script = f"""
 <script type="application/ld+json">
 {{
