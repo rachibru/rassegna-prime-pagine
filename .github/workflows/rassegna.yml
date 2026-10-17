@@ -1,4 +1,19 @@
-- name: Set up Python
+name: Rassegna Stampa Automatica
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Invia ogni giorno alle 06:00 italiane (04:00 UTC)
+  workflow_dispatch: # Permette l'esecuzione manuale da GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
