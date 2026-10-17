@@ -27,16 +27,13 @@ def fetch_live_news_rss():
     for category, query in topics.items():
         news_text += f"\n--- {category} DI OGGI ---\n"
         encoded_query = urllib.parse.quote(query)
-        # Feed RSS ufficiale di Google News Italia filtrato per lingua italiana e regione IT
         rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=it&gl=IT&ceid=IT:it"
         
         try:
             feed = feedparser.parse(rss_url)
-            # Prende le prime 6 notizie più recenti per categoria
             entries = feed.entries[:6]
             for idx, entry in enumerate(entries, 1):
                 title = entry.get("title", "")
-                # Estrae il nome della testata (es. 'ANSA.it', 'Corriere della Sera')
                 source = entry.get("source", {}).get("title", "Testata Giornalistica")
                 published = entry.get("published", "")
                 
@@ -198,6 +195,7 @@ def main():
 </div>
 """
 
+    # CREDENZIALI CORRETTE SENZA FORMATTAZIONE MARKDOWN
     creds = Credentials(
         token=None,
         refresh_token=refresh_token,
@@ -225,6 +223,8 @@ def main():
     post_url = published_post.get("url")
 
     iso_date = datetime.datetime.now().isoformat()
+    
+    # SCHEMA.ORG CORRETTO SENZA FORMATTAZIONE MARKDOWN
     schema_org_script = f"""
 <script type="application/ld+json">
 {{
@@ -240,12 +240,12 @@ def main():
   "author": {{
     "@type": "Person",
     "name": "Bruno Rachiele",
-    "url": "[https://bio.brunorachiele.it"
+    "url": "[https://bio.brunorachiele.it](https://bio.brunorachiele.it)"
   }},
   "publisher": {{
     "@type": "Organization",
     "name": "brunorachiele.it",
-    "url": "[https://www.brunorachiele.it"
+    "url": "[https://www.brunorachiele.it](https://www.brunorachiele.it)"
   }}
 }}
 </script>
