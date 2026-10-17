@@ -1,21 +1,33 @@
-from google.auth.transport.requests import Request
+name: Rassegna Stampa Automatica
 
-    # Sanitizzazione stringhe da eventuali spazi o parentesi quadre nei Secret
-    client_id = client_id.strip().strip("[").strip("]")
-    client_secret = client_secret.strip().strip("[").strip("]")
-    refresh_token = refresh_token.strip().strip("[").strip("]")
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 
-    creds = Credentials(
-        token=None,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=client_id,
-        client_secret=client_secret,
-        scopes=["https://www.googleapis.com/auth/blogger"]
-    )
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-    # Forziamo il refresh usando il transport Request standard
-    if not creds.valid:
-        creds.refresh(Request())
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-    blogger_service = build("blogger", "v3", credentials=creds)
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Python script
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+        BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+        BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+        BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+      run: python rassegna.py
