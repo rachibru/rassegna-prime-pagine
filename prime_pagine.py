@@ -287,7 +287,7 @@ def main():
       </div>
     </div>"""
 
-    # HTML con script JS dinamico e H1 personalizzato
+    # HTML pulito senza doppio H1 e con testi aggiornati per la Rassegna Stampa
     final_html = f"""
 <script type="application/ld+json">
 {schema_json}
@@ -295,17 +295,16 @@ def main():
 
 {custom_css}
 <div class="prime-pagine-container">
-  <h1 style="text-align: center; font-size: 1.8rem; margin-bottom: 10px; color: #1a365d;">#primepagine del {today_formatted}</h1>
   <div class="prime-pagine-header">
     <p>Edicola Digitale - Ultimo aggiornamento: <strong>{today_str}</strong></p>
   </div>
 
-  <!-- Box Promo Commento Ultima Rassegna Stampa -->
+  <!-- Box Promo Ultima Rassegna Stampa -->
   <div class="commento-banner">
-    <h2>✍️ Il Commento di Oggi</h2>
+    <h2>✍️ Le notizie più importanti della settimana</h2>
     <p id="rassegna-post-title">Caricamento dell'ultimo commento in corso...</p>
     <a href="https://www.brunorachiele.it/search/label/Rassegna%20Stampa" id="rassegna-post-link" class="commento-btn" target="_blank">
-      Leggi il commento alle notizie di oggi &rarr;
+      Leggi l'ultima Rassegna Stampa &rarr;
     </a>
   </div>
 
