@@ -1,9 +1,9 @@
-name: Rassegna Stampa Automatica
+name: Prime Pagine Automatiche
 
 on:
   schedule:
-    # Esegue lo script ogni domenica alle 05:00 UTC (ore 06:00 del mattino in Italia)
-    - cron: '0 5 * * 0'
+    # Esegue lo script ogni giorno alle 05:00 UTC (ore 06:00 in Italia)
+    - cron: '0 5 * * *'
   workflow_dispatch:
 
 jobs:
@@ -31,4 +31,4 @@ jobs:
         BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
         BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
         BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
-      run: python rassegna.py
+      run: python prime_pagine.py
