@@ -2,24 +2,7 @@ import os
 import json
 import datetime
 import requests
-import zoneinfo  # Aggiungi in alto con gli altri import
-
-def main():
-    # ... i tuoi secret ...
-
-    papers = fetch_prime_pagine()
-    # ... controlli sui papers ...
-
-    # FORZA IL FUSO ORARIO ITALIANO
-    tz_rome = zoneinfo.ZoneInfo("Europe/Rome")
-    today = datetime.datetime.now(tz_rome).date()
-
-    month_name = MESI_ITA.get(today.month, today.strftime("%B"))
-    today_formatted = f"{today.day} {month_name} {today.year}"
-    today_str = today.strftime("%d/%m/%Y")
-
-    dynamic_page_title = f"#primepagine del {today_formatted}"
-    now_iso = datetime.datetime.now(tz_rome).iso
+import zoneinfo
 from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -122,13 +105,17 @@ def main():
         print("Nessuna copertina estratta. Interruzione.")
         return
 
-    today = datetime.date.today()
+    # FORZA IL FUSO ORARIO ITALIANO
+    tz_rome = zoneinfo.ZoneInfo("Europe/Rome")
+    now_rome = datetime.datetime.now(tz_rome)
+    today = now_rome.date()
+
     month_name = MESI_ITA.get(today.month, today.strftime("%B"))
     today_formatted = f"{today.day} {month_name} {today.year}"
     today_str = today.strftime("%d/%m/%Y")
 
     dynamic_page_title = f"#primepagine del {today_formatted}"
-    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now_iso = now_rome.isoformat()
 
     schema_data = {
         "@context": "https://schema.org",
@@ -300,7 +287,7 @@ def main():
       </div>
     </div>"""
 
-    # HTML con script JS dinamico per leggere il post più recente in tempo reale lato client
+    # HTML con script JS dinamico e H1 personalizzato
     final_html = f"""
 <script type="application/ld+json">
 {schema_json}
@@ -308,6 +295,7 @@ def main():
 
 {custom_css}
 <div class="prime-pagine-container">
+  <h1 style="text-align: center; font-size: 1.8rem; margin-bottom: 10px; color: #1a365d;">#primepagine del {today_formatted}</h1>
   <div class="prime-pagine-header">
     <p>Edicola Digitale - Ultimo aggiornamento: <strong>{today_str}</strong></p>
   </div>
