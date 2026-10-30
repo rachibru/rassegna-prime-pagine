@@ -11,7 +11,7 @@ from google.genai import types
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 
 def get_blogger_access_token(client_id, client_secret, refresh_token):
-    """Ottiene un nuovo Access Token per Blogger direttamente via HTTP POST, evitando librerie OAuth complesse."""
+    """Ottiene un nuovo Access Token per Blogger via OAuth 2.0."""
     print("Richiesta token di accesso a Google OAuth 2.0...")
     url = "https://oauth2.googleapis.com/token"
     payload = {
@@ -27,27 +27,28 @@ def get_blogger_access_token(client_id, client_secret, refresh_token):
     token_data = response.json()
     return token_data.get("access_token")
 
-def fetch_live_news_rss():
-    """Recupera notizie reali tramite i Feed RSS di Google News Italia."""
-    print("Estrazione notizie in tempo reale tramite Google News RSS...")
+def fetch_weekly_news_rss():
+    """Recupera le principali notizie della SETTIMANA tramite Google News RSS."""
+    print("Estrazione notizie della settimana tramite Google News RSS...")
     
+    # query con 'when:7d' per filtrare gli avvenimenti degli ultimi 7 giorni
     topics = {
-        "POLITICA ED ELEZIONI": "politica+italia+governo+parlamento+sondaggi",
-        "ESTERI ED ATTUALITA": "esteri+geopolitica+mondo+attualita",
-        "ECONOMIA E GIORNALI": "economia+fisco+mercati+lavoro+giornali"
+        "POLITICA ED ELEZIONI": "politica+italia+governo+parlamento+sondaggi+when:7d",
+        "ESTERI ED ATTUALITA": "esteri+geopolitica+mondo+attualita+when:7d",
+        "ECONOMIA E GIORNALI": "economia+fisco+mercati+lavoro+when:7d"
     }
     
     news_text = ""
     total_found = 0
     
     for category, query in topics.items():
-        news_text += f"\n--- {category} DI OGGI ---\n"
+        news_text += f"\n--- {category} DELLA SETTIMANA ---\n"
         encoded_query = urllib.parse.quote(query)
         rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=it&gl=IT&ceid=IT:it"
         
         try:
             feed = feedparser.parse(rss_url)
-            entries = feed.entries[:6]
+            entries = feed.entries[:8]  # Prende i primi 8 fatti rilevanti
             for idx, entry in enumerate(entries, 1):
                 title = entry.get("title", "")
                 source = entry.get("source", {}).get("title", "Testata Giornalistica")
@@ -59,16 +60,16 @@ def fetch_live_news_rss():
         except Exception as e:
             print(f"[-] Errore nel recupero RSS per {category}: {e}")
 
-    print(f"[+] Totale notizie reali estratte oggi: {total_found}")
+    print(f"[+] Totale notizie estratte per la rassegna: {total_found}")
     return news_text
 
-def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
-    """Chiamata robusta con retry per Gemini API."""
+def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=3):
+    """Chiamata con retry per la generazione con Gemini API."""
     for attempt in range(1, max_retries + 1):
         try:
             print(f"Tentativo {attempt}/{max_retries}: Generazione rassegna con Gemini...")
             response = gemini_client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction,
@@ -79,13 +80,12 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=5):
         except Exception as e:
             print(f"[-] Errore al tentativo {attempt}: {e}")
             if attempt < max_retries:
-                wait_time = attempt * 10
-                time.sleep(wait_time)
+                time.sleep(attempt * 5)
             else:
                 raise e
 
 def publish_to_blogger(blog_id, access_token, title, html_content):
-    """Pubblica il post su Blogger tramite API REST v3."""
+    """Pubblica il post direttamente con HTML e Schema.org in una sola operazione."""
     print("Pubblicazione post su Blogger...")
     url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts/"
     
@@ -97,7 +97,7 @@ def publish_to_blogger(blog_id, access_token, title, html_content):
     payload = {
         "title": title,
         "content": html_content,
-        "labels": ["Rassegna Stampa"]
+        "labels": ["Rassegna Stampa", "Settimana"]
     }
     
     res = requests.post(url, headers=headers, json=payload)
@@ -107,90 +107,61 @@ def publish_to_blogger(blog_id, access_token, title, html_content):
     post_data = res.json()
     post_id = post_data.get("id")
     post_url = post_data.get("url")
-    print(f"[SUCCESS] Post pubblicato! ID: {post_id} - URL: {post_url}")
+    print(f"[SUCCESS] Post pubblicato correttamente! ID: {post_id} - URL Canonico: {post_url}")
     return post_id, post_url
 
-def update_blogger_post(blog_id, post_id, access_token, title, updated_html):
-    """Aggiorna il post con lo script Schema.org incluso."""
-    print("Aggiornamento post con metadata Schema.org...")
-    url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts/{post_id}"
-    
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "title": title,
-        "content": updated_html,
-        "labels": ["Rassegna Stampa"]
-    }
-    
-    res = requests.patch(url, headers=headers, json=payload)
-    if res.status_code != 200:
-        print(f"[-] Avviso aggiornamento metadata: {res.status_code} - {res.text}")
-    else:
-        print("[SUCCESS] Metadata Schema.org aggiunti con successo!")
-
 def main():
-    gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip().strip("[").strip("]")
-    blog_id = os.environ.get("BLOGGER_BLOG_ID", "").strip().strip("[").strip("]")
-    client_id = os.environ.get("BLOGGER_CLIENT_ID", "").strip().strip("[").strip("]")
-    client_secret = os.environ.get("BLOGGER_CLIENT_SECRET", "").strip().strip("[").strip("]")
-    refresh_token = os.environ.get("BLOGGER_REFRESH_TOKEN", "").strip().strip("[").strip("]")
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip("[] ")
+    blog_id = os.environ.get("BLOGGER_BLOG_ID", "").strip("[] ")
+    client_id = os.environ.get("BLOGGER_CLIENT_ID", "").strip("[] ")
+    client_secret = os.environ.get("BLOGGER_CLIENT_SECRET", "").strip("[] ")
+    refresh_token = os.environ.get("BLOGGER_REFRESH_TOKEN", "").strip("[] ")
 
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
-        raise ValueError("Tutti i secret devono essere configurati su GitHub.")
+        raise ValueError("Verifica che tutte le variabili d'ambiente/secrets siano configurate.")
 
-    # 1. Ottieni il token di accesso
+    # 1. Autenticazione
     access_token = get_blogger_access_token(client_id, client_secret, refresh_token)
 
-    # 2. Estrai notizie fresche
-    live_news_context = fetch_live_news_rss()
+    # 2. Estrazione dati settimanali
+    live_news_context = fetch_weekly_news_rss()
     
-    today = datetime.date.today()
-    mesi = {
-        1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
-        5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
-        9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
-    }
-    today_formatted = f"{today.day} {mesi[today.month]} {today.year}"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today_formatted = now.strftime("%d/%m/%Y")
 
-    # 3. Generazione AI
+    # 3. Inizializzazione Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
 
     sys_instruction = (
         "Sei uno studente di giurisprudenza di 23 anni, attivista politico e giornalista di orientamento liberal-conservatore. "
-        "Scrivi una rassegna stampa basandoti TASSATIVAMENTE sui fatti e le notizie REALI forniti nel contesto. "
-        "Sii analitico, incisivo e orientato alle riforme e alla stabilità politica."
+        "Scrivi la rassegna stampa domenicale basandoti TASSATIVAMENTE sulle notizie REALI della settimana fornite. "
+        "Sii analitico, incisivo e orientato alle riforme, alla stabilità e allo sviluppo economico."
     )
 
     prompt = f"""
-    OGGI È IL {today_formatted}.
-    Ecco l'elenco delle NOTIZIE REALI estratte dai giornali e dalle agenzie di stampa per oggi:
+    OGGI È LA RASSEGNA STAMPA DOMENICALE DEL {today_formatted}.
+    Ecco le NOTIZIE REALI estratte dagli ultimi 7 giorni:
     {live_news_context}
 
-    REGOLE TASSATIVE PER IL TITOLO:
-    - La primissima riga dell'output DEVE essere il titolo racchiuso dentro <h1>...</h1>.
-    - Il titolo DEVE essere unico, giornalistico e citare espressamente i 2 o 3 fatti principali di OGGI.
-    - NON USARE MAI un titolo generico come solo "Rassegna Stampa del {today_formatted}".
+    REGOLE PER IL TITOLO:
+    - La prima riga DEVE essere il titolo della rassegna dentro <h1>...</h1>.
+    - Deve evidenziare i 2 o 3 fatti politici/economici chiave della settimana.
 
-    STRUTTURA OBBLIGATORIA DELLE SEZIONI (Formattazione HTML):
-    Organizza la rassegna in 6 card HTML stilizzate per questi temi:
-    1. <h2>Primo Piano & Attualità</h2> (Icona: 📌)
-    2. <h2>Politica & Istituzioni</h2> (Icona: 🏛️)
-    3. <h2>Esteri & Geopolitica</h2> (Icona: 🌐)
-    4. <h2>Dalle Prime Pagine</h2> (Icona: 📰)
-    5. <h2>Elezioni & Sondaggi</h2> (Icona: 🗳️)
-    6. <h2>Economia & Mercati</h2> (Icona: 📈)
+    STRUTTURA IN 6 CARD TEMATICHE (Solo tag HTML, no Markdown):
+    1. <div class="news-card"><div class="card-header"><h2>📌 Primo Piano & Attualità Settimanale</h2></div>...</div>
+    2. <div class="news-card"><div class="card-header"><h2>🏛️ Politica & Istituzioni</h2></div>...</div>
+    3. <div class="news-card"><div class="card-header"><h2>🌐 Esteri & Geopolitica</h2></div>...</div>
+    4. <div class="news-card"><div class="card-header"><h2>📰 Dalle Prime Pagine del Weekend</h2></div>...</div>
+    5. <div class="news-card"><div class="card-header"><h2>🗳️ Elezioni & Sondaggi</h2></div>...</div>
+    6. <div class="news-card"><div class="card-header"><h2>📈 Economia & Mercati</h2></div>...</div>
 
-    In fondo ad ogni card inserisci il tag con la fonte reale citata nei dati:
-    <div class="card-source">📰 Fonte: Nome Testata / Quotidiano</div>
+    Ogni card deve contenere una sintesi e terminare con la fonte:
+    <div class="card-source">📰 Fonti della settimana: Nome Testata</div>
     """
 
     raw_html = generate_with_retry(gemini_client, prompt, sys_instruction)
 
-    # Clean HTML
+    # Pulizia Output dell'AI
     cleaned_html = re.sub(r"^```html\s*", "", raw_html, flags=re.IGNORECASE)
     cleaned_html = re.sub(r"\s*```$", "", cleaned_html).strip()
 
@@ -200,7 +171,7 @@ def main():
         post_title = h1_match.group(1).strip()
         body_content = re.sub(r"<h1>.*?</h1>", "", cleaned_html, count=1, flags=re.IGNORECASE | re.DOTALL).strip()
     else:
-        post_title = f"Rassegna Stampa del {today_formatted}: Le Notizie di Oggi"
+        post_title = f"Rassegna Stampa Domenicale ({today_formatted}) – I fatti della settimana"
         body_content = cleaned_html
 
     custom_css = """
@@ -254,46 +225,46 @@ def main():
 </style>
 """
 
+    iso_date = now.isoformat()
+
+    # Schema.org dinamico inserito DIRETTAMENTE nel codice finale
+    schema_org_script = f"""
+<script type="application/ld+json">
+{{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "{post_title}",
+  "image": ["{HEADER_IMAGE_URL}"],
+  "datePublished": "{iso_date}",
+  "dateModified": "{iso_date}",
+  "author": {{
+    "@type": "Person",
+    "name": "Bruno Rachiele",
+    "url": "https://www.brunorachiele.it/"
+  }},
+  "publisher": {{
+    "@type": "Organization",
+    "name": "Bruno Rachiele",
+    "logo": {{
+      "@type": "ImageObject",
+      "url": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiOeKLAFzNySkI5ahC_uZiv0Asne6shnjr1QndoMNmRBtkNdQfe59GGO3nY5nc5C4OCXNMXGXu1XtHm0X7gPqbvTgFjqszFGQrPD3G5R4c2MIJPiZCk5OX6dLbnYKeU1itEVo7OcJB9I0N-Wi9z9WP64l5_btoNMrZ111Ex8i-W9UcKwOJPv5uDnl6LwhA/s1600/2ed26cc2-38e4-4d67-a1c5-5e522b654c90%20%281%29.png"
+    }}
+  }}
+}}
+</script>
+"""
+
     final_article_html = f"""
 {custom_css}
 <div class="rassegna-container">
   <img src="{HEADER_IMAGE_URL}" alt="{post_title}" class="rassegna-header-img" />
   {body_content}
 </div>
+{schema_org_script}
 """
 
-    # 4. Pubblica su Blogger
-    post_id, post_url = publish_to_blogger(blog_id, access_token, post_title, final_article_html)
-
-    # 5. Schema.org update
-    iso_date = datetime.datetime.now().isoformat()
-    schema_org_script = f"""
-<script type="application/ld+json">
-{{
-  "@context": "https://schema.org",
-  "@type": "NewsArticle",
-  "mainEntityOfPage": {{
-    "@type": "WebPage",
-    "@id": "{post_url}"
-  }},
-  "headline": "{post_title}",
-  "image": ["{HEADER_IMAGE_URL}"],
-  "datePublished": "{iso_date}",
-  "author": {{
-    "@type": "Person",
-    "name": "Bruno Rachiele",
-    "url": "https://bio.brunorachiele.it"
-  }},
-  "publisher": {{
-    "@type": "Organization",
-    "name": "brunorachiele.it",
-    "url": "https://www.brunorachiele.it"
-  }}
-}}
-</script>
-"""
-    updated_html = final_article_html + "\n" + schema_org_script
-    update_blogger_post(blog_id, post_id, access_token, post_title, updated_html)
+    # Pubblica su Blogger in una sola chiamata
+    publish_to_blogger(blog_id, access_token, post_title, final_article_html)
 
 if __name__ == "__main__":
     main()
