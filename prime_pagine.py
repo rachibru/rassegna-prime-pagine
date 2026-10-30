@@ -138,7 +138,7 @@ def main():
             "name": "Bruno Rachiele",
             "logo": {
                 "@type": "ImageObject",
-                "url": "https://www.brunorachiele.it/favicon.ico"
+                "url": "https://static.brunorachiele.it/logo.png"
             }
         },
         "image": [p["image_url"] for p in papers[:3]]
