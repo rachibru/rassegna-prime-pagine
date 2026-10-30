@@ -2,6 +2,24 @@ import os
 import json
 import datetime
 import requests
+import zoneinfo  # Aggiungi in alto con gli altri import
+
+def main():
+    # ... i tuoi secret ...
+
+    papers = fetch_prime_pagine()
+    # ... controlli sui papers ...
+
+    # FORZA IL FUSO ORARIO ITALIANO
+    tz_rome = zoneinfo.ZoneInfo("Europe/Rome")
+    today = datetime.datetime.now(tz_rome).date()
+
+    month_name = MESI_ITA.get(today.month, today.strftime("%B"))
+    today_formatted = f"{today.day} {month_name} {today.year}"
+    today_str = today.strftime("%d/%m/%Y")
+
+    dynamic_page_title = f"#primepagine del {today_formatted}"
+    now_iso = datetime.datetime.now(tz_rome).iso
 from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
