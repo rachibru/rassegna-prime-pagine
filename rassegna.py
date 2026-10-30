@@ -69,7 +69,7 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=3):
         try:
             print(f"Tentativo {attempt}/{max_retries}: Generazione rassegna con Gemini...")
             response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction,
