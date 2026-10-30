@@ -131,7 +131,7 @@ def main():
         "author": {
             "@type": "Person",
             "name": "Bruno Rachiele",
-            "url": "https://www.brunorachiele.it/"
+            "url": "https://bio.brunorachiele.it/"
         },
         "publisher": {
             "@type": "Organization",
