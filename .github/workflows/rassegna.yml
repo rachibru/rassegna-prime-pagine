@@ -1,0 +1,40 @@
+name: Rassegna Stampa Automatica
+
+on:
+  schedule:
+    # Esegue lo script ogni domenica alle 05:00 UTC (ore 06:00 in Italia con ora solare)
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # PROTEZIONE 1: Limita l'esecuzione a massimo 10 minuti per evitare il blocco perenne
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        # PROTEZIONE 2: Abilita il caching di pip per velocizzare l'installazione
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Python script
+      # PROTEZIONE 3: Forza l'output immediato nei log per non nascondere blocchi
+      env:
+        PYTHONUNBUFFERED: "1"
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+        BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+        BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+        BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+      run: python rassegna.py
