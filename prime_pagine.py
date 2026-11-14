@@ -124,19 +124,12 @@ def fetch_morning_headlines():
                 xml_root = ET.fromstring(r.content)
                 for item in xml_root.findall("./channel/item"):
                     title_el = item.find("title")
-                    desc_el = item.find("description")
                     if title_el is not None and title_el.text:
                         clean_title = BeautifulSoup(title_el.text, "html.parser").get_text().strip()
-                        clean_desc = ""
-                        if desc_el is not None and desc_el.text:
-                            raw_desc = BeautifulSoup(desc_el.text, "html.parser").get_text().strip()
-                            if len(raw_desc) > 20 and raw_desc.lower() != clean_title.lower():
-                                clean_desc = raw_desc[:180].rstrip(" ,;:") + "..."
                         if len(clean_title) > 15:
                             headlines.append({
                                 "source": feed["source"],
-                                "title": clean_title,
-                                "summary": clean_desc
+                                "title": clean_title
                             })
                             print(f"[+] Titolo RSS estratto da {feed['source']}: {clean_title[:60]}...")
                             break
@@ -293,7 +286,7 @@ def main():
     ).execute()
     print(f"[SUCCESS] Pagina fissa aggiornata: {updated_page.get('url')}")
 
-    # 2. CREA IL NUOVO ARTICOLO GIORNALIERO CON TITOLI RSS
+    # 2. CREA IL NUOVO ARTICOLO GIORNALIERO CON TICKER SCORREVOLE
     post_title = f"Prime pagine dei quotidiani di oggi {today_full}: i titoli in edicola"
     existing_url = post_already_exists_today(blogger_service, blog_id, post_title)
     if existing_url:
@@ -303,17 +296,59 @@ def main():
     headlines = fetch_morning_headlines()
     headlines_html = ""
     if headlines:
-        items_headlines = ""
-        for h in headlines:
-            desc_part = f"<br><span style='color:#475569; font-size:0.95rem;'>{h['summary']}</span>" if h["summary"] else ""
-            items_headlines += f"<li style='margin-bottom:12px;'><strong>{h['source']}:</strong> &laquo;{h['title']}&raquo;{desc_part}</li>"
-
+        ticker_segments = " &nbsp;&bull;&nbsp; ".join(
+            f"<strong>{h['source']}:</strong> &laquo;{h['title']}&raquo;" for h in headlines
+        )
         headlines_html = f"""
-  <div style="margin:22px 0; padding:18px 20px; background:#f8fafc; border-left:4px solid #0b4a9f; border-radius:8px;">
-    <h2 style="margin:0 0 12px; font-size:1.18rem; color:#0f172a;">I temi principali in apertura stamattina</h2>
-    <ul style="margin:0; padding-left:18px; line-height:1.6;">
-      {items_headlines}
-    </ul>
+  <style>
+    .br-ticker-box {{
+      margin: 22px 0;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #0b4a9f;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }}
+    .br-ticker-label {{
+      background: #0b4a9f;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 12px 14px;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+      z-index: 2;
+    }}
+    .br-ticker-viewport {{
+      overflow: hidden;
+      white-space: nowrap;
+      width: 100%;
+      padding: 10px 0;
+    }}
+    .br-ticker-track {{
+      display: inline-block;
+      padding-left: 100%;
+      animation: brTickerScroll 34s linear infinite;
+      font-size: 0.96rem;
+      color: #0f172a;
+    }}
+    .br-ticker-box:hover .br-ticker-track {{
+      animation-play-state: paused;
+    }}
+    @keyframes brTickerScroll {{
+      0% {{ transform: translateX(0); }}
+      100% {{ transform: translateX(-100%); }}
+    }}
+  </style>
+  <div class="br-ticker-box" aria-label="I temi principali in apertura stamattina">
+    <div class="br-ticker-label">IN APERTURA STAMATTINA</div>
+    <div class="br-ticker-viewport">
+      <div class="br-ticker-track">
+        {ticker_segments}
+      </div>
+    </div>
   </div>"""
 
     latest_articles = fetch_latest_3_articles()
