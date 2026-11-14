@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 
 TARGET_PAGE_ID = "4213404198440467971"
 STATIC_PAGE_URL = "https://www.brunorachiele.it/p/prime-pagine-dei-giornali.html"
-COVER_IMAGE_URL = "https://static.brunorachiele.it/logo.png"
+COVER_IMAGE_URL = "https://static.brunorachiele.it/primepagine.png"
 
 QUOTIDIANI_MAP = [
     {"name": "Corriere della Sera", "url": "https://giornali.it/quotidiani-nazionali/corriere-della-sera/prima-pagina/"},
