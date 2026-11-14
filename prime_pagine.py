@@ -286,7 +286,7 @@ def main():
     ).execute()
     print(f"[SUCCESS] Pagina fissa aggiornata: {updated_page.get('url')}")
 
-    # 2. CREA IL NUOVO ARTICOLO GIORNALIERO CON TICKER SCORREVOLE
+    # 2. CREA IL NUOVO ARTICOLO GIORNALIERO CON SINTESI EDITORIALE PULITA
     post_title = f"Prime pagine dei quotidiani di oggi {today_full}: i titoli in edicola"
     existing_url = post_already_exists_today(blogger_service, blog_id, post_title)
     if existing_url:
@@ -296,58 +296,20 @@ def main():
     headlines = fetch_morning_headlines()
     headlines_html = ""
     if headlines:
-        ticker_segments = " &nbsp;&bull;&nbsp; ".join(
-            f"<strong>{h['source']}:</strong> &laquo;{h['title']}&raquo;" for h in headlines
-        )
+        blocks = []
+        for h in headlines:
+            blocks.append(
+                f"<div style='padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px;'>"
+                f"<span style='display:inline-block; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#0b4a9f; margin-bottom:4px;'>{h['source']}</span>"
+                f"<p style='margin:0; font-size:0.98rem; font-weight:600; color:#0f172a; line-height:1.45;'>&laquo;{h['title']}&raquo;</p>"
+                f"</div>"
+            )
+        cards_grid = "".join(blocks)
         headlines_html = f"""
-  <style>
-    .br-ticker-box {{
-      margin: 22px 0;
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-left: 4px solid #0b4a9f;
-      border-radius: 8px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-    }}
-    .br-ticker-label {{
-      background: #0b4a9f;
-      color: #ffffff;
-      font-weight: 700;
-      font-size: 0.85rem;
-      padding: 12px 14px;
-      white-space: nowrap;
-      letter-spacing: 0.02em;
-      z-index: 2;
-    }}
-    .br-ticker-viewport {{
-      overflow: hidden;
-      white-space: nowrap;
-      width: 100%;
-      padding: 10px 0;
-    }}
-    .br-ticker-track {{
-      display: inline-block;
-      padding-left: 100%;
-      animation: brTickerScroll 34s linear infinite;
-      font-size: 0.96rem;
-      color: #0f172a;
-    }}
-    .br-ticker-box:hover .br-ticker-track {{
-      animation-play-state: paused;
-    }}
-    @keyframes brTickerScroll {{
-      0% {{ transform: translateX(0); }}
-      100% {{ transform: translateX(-100%); }}
-    }}
-  </style>
-  <div class="br-ticker-box" aria-label="I temi principali in apertura stamattina">
-    <div class="br-ticker-label">IN APERTURA STAMATTINA</div>
-    <div class="br-ticker-viewport">
-      <div class="br-ticker-track">
-        {ticker_segments}
-      </div>
+  <div style="margin:22px 0; padding:18px; background:#f8fafc; border-left:4px solid #0b4a9f; border-radius:10px;">
+    <h2 style="margin:0 0 14px; font-size:1.15rem; color:#0f172a;">I temi principali in apertura stamattina</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+      {cards_grid}
     </div>
   </div>"""
 
