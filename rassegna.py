@@ -2,6 +2,7 @@ import os
 import re
 import time
 import datetime
+import zoneinfo
 import urllib.parse
 import feedparser
 import requests
@@ -9,6 +10,13 @@ from google import genai
 from google.genai import types
 
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
+STATIC_PAGE_URL = "https://www.brunorachiele.it/p/prime-pagine-dei-giornali.html"
+
+MGID_WIDGET_HTML = """
+<div data-type="_mgwidget" data-widget-id="2120271"></div>
+<script>(function(w,q){w[q]=w[q]||[];w[q].push(["_mgc.load"])})(window,"_mgq");</script>
+"""
+
 
 def get_blogger_access_token(client_id, client_secret, refresh_token):
     """Ottiene un nuovo Access Token per Blogger via OAuth 2.0."""
@@ -20,40 +28,56 @@ def get_blogger_access_token(client_id, client_secret, refresh_token):
         "refresh_token": refresh_token,
         "grant_type": "refresh_token"
     }
-    response = requests.post(url, data=payload)
+    response = requests.post(url, data=payload, timeout=30)
     if response.status_code != 200:
         raise RuntimeError(f"Errore OAuth Google: {response.status_code} - {response.text}")
-    
+
     token_data = response.json()
     return token_data.get("access_token")
+
+
+def sunday_post_already_exists(blog_id, access_token, today_str):
+    """Evita duplicati se il workflow viene rilanciato manualmente la domenica."""
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts?labels=Settimana&maxResults=5"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        r = requests.get(url, headers=headers, timeout=20)
+        if r.status_code == 200:
+            for item in r.json().get("items", []):
+                published = item.get("published", "")
+                if today_str in item.get("title", "") or published.startswith(datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")):
+                    return item.get("url")
+    except Exception as e:
+        print(f"[-] Avviso controllo duplicati domenica: {e}")
+    return None
+
 
 def fetch_weekly_news_rss():
     """Recupera le principali notizie della SETTIMANA tramite Google News RSS."""
     print("Estrazione notizie della settimana tramite Google News RSS...")
-    
-    # query con 'when:7d' per filtrare gli avvenimenti degli ultimi 7 giorni
+
     topics = {
         "POLITICA ED ELEZIONI": "politica+italia+governo+parlamento+sondaggi+when:7d",
         "ESTERI ED ATTUALITA": "esteri+geopolitica+mondo+attualita+when:7d",
         "ECONOMIA E GIORNALI": "economia+fisco+mercati+lavoro+when:7d"
     }
-    
+
     news_text = ""
     total_found = 0
-    
+
     for category, query in topics.items():
         news_text += f"\n--- {category} DELLA SETTIMANA ---\n"
         encoded_query = urllib.parse.quote(query)
         rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=it&gl=IT&ceid=IT:it"
-        
+
         try:
             feed = feedparser.parse(rss_url)
-            entries = feed.entries[:8]  # Prende i primi 8 fatti rilevanti
+            entries = feed.entries[:8]
             for idx, entry in enumerate(entries, 1):
                 title = entry.get("title", "")
                 source = entry.get("source", {}).get("title", "Testata Giornalistica")
                 published = entry.get("published", "")
-                
+
                 if title:
                     news_text += f"{idx}. [{source}] {title} (Pubblicato: {published})\n"
                     total_found += 1
@@ -62,6 +86,7 @@ def fetch_weekly_news_rss():
 
     print(f"[+] Totale notizie estratte per la rassegna: {total_found}")
     return news_text
+
 
 def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=3):
     """Chiamata con retry per la generazione con Gemini API."""
@@ -84,33 +109,44 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=3):
             else:
                 raise e
 
+
 def publish_to_blogger(blog_id, access_token, title, html_content):
     """Pubblica il post direttamente con HTML e Schema.org in una sola operazione."""
     print("Pubblicazione post su Blogger...")
     url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts/"
-    
+
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
-    
+
     payload = {
         "title": title,
         "content": html_content,
-        "labels": ["Rassegna Stampa", "Settimana"]
+        "labels": ["Rassegna Stampa", "Prime Pagine", "Settimana"]
     }
-    
-    res = requests.post(url, headers=headers, json=payload)
+
+    res = requests.post(url, headers=headers, json=payload, timeout=30)
     if res.status_code != 200:
         raise RuntimeError(f"Errore pubblicazione Blogger: {res.status_code} - {res.text}")
-    
+
     post_data = res.json()
     post_id = post_data.get("id")
     post_url = post_data.get("url")
     print(f"[SUCCESS] Post pubblicato correttamente! ID: {post_id} - URL Canonico: {post_url}")
     return post_id, post_url
 
+
 def main():
+    tz_rome = zoneinfo.ZoneInfo("Europe/Rome")
+    now_rome = datetime.datetime.now(tz_rome)
+    today = now_rome.date()
+
+    # Esegue la rassegna completa SOLO la domenica (weekday == 6)
+    if today.weekday() != 6:
+        print("[INFO] Oggi non è domenica: rassegna.py non pubblica nulla (gira solo la domenica).")
+        return
+
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip("[] ")
     blog_id = os.environ.get("BLOGGER_BLOG_ID", "").strip("[] ")
     client_id = os.environ.get("BLOGGER_CLIENT_ID", "").strip("[] ")
@@ -120,14 +156,17 @@ def main():
     if not all([gemini_api_key, blog_id, client_id, client_secret, refresh_token]):
         raise ValueError("Verifica che tutte le variabili d'ambiente/secrets siano configurate.")
 
-    # 1. Autenticazione
+    # 1. Autenticazione e controllo anti-duplicato
     access_token = get_blogger_access_token(client_id, client_secret, refresh_token)
+    today_formatted = today.strftime("%d/%m/%Y")
+
+    existing_url = sunday_post_already_exists(blog_id, access_token, today_formatted)
+    if existing_url:
+        print(f"[INFO] Rassegna Stampa Domenicale già pubblicata oggi ({existing_url}). Stop.")
+        return
 
     # 2. Estrazione dati settimanali
     live_news_context = fetch_weekly_news_rss()
-    
-    now = datetime.datetime.now(datetime.timezone.utc)
-    today_formatted = now.strftime("%d/%m/%Y")
 
     # 3. Inizializzazione Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
@@ -225,15 +264,15 @@ def main():
 </style>
 """
 
-    iso_date = now.isoformat()
+    iso_date = now_rome.isoformat()
+    safe_headline = post_title.replace('"', '\\"')
 
-    # Schema.org dinamico inserito DIRETTAMENTE nel codice finale
     schema_org_script = f"""
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "NewsArticle",
-  "headline": "{post_title}",
+  "headline": "{safe_headline}",
   "image": ["{HEADER_IMAGE_URL}"],
   "datePublished": "{iso_date}",
   "dateModified": "{iso_date}",
@@ -257,14 +296,25 @@ def main():
     final_article_html = f"""
 {custom_css}
 <div class="rassegna-container">
-  <img src="{HEADER_IMAGE_URL}" alt="{post_title}" class="rassegna-header-img" />
+  <img src="{HEADER_IMAGE_URL}" alt="{safe_headline}" class="rassegna-header-img" />
   {body_content}
+
+  <div style="text-align:center; margin:26px 0; padding:22px 18px; background:linear-gradient(135deg,#0b4a9f 0%,#1d4ed8 100%); border-radius:12px; color:#ffffff;">
+    <p style="margin:0 0 12px; font-size:1.15rem; font-weight:700; color:#ffffff;">Sfoglia tutte le prime pagine dei quotidiani di oggi in alta risoluzione</p>
+    <a href="{STATIC_PAGE_URL}" style="display:inline-block; background:#ffffff; color:#0b4a9f !important; font-weight:700; padding:12px 24px; border-radius:50px; text-decoration:none; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+      Apri l'Edicola Digitale del {today_formatted} &rarr;
+    </a>
+  </div>
+
+  <div style="margin:24px auto; text-align:center;">
+    {MGID_WIDGET_HTML}
+  </div>
 </div>
 {schema_org_script}
 """
 
-    # Pubblica su Blogger in una sola chiamata
     publish_to_blogger(blog_id, access_token, post_title, final_article_html)
+
 
 if __name__ == "__main__":
     main()
