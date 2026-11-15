@@ -210,7 +210,7 @@ def main():
     today_str = today.strftime("%d/%m/%Y")
     now_iso = now_rome.isoformat()
 
-    # 1. AGGIORNA LA PAGINA EDICOLA FISSA (TARGET_PAGE_ID)
+    # 1. AGGIORNA SEMPRE LA PAGINA EDICOLA FISSA (TARGET_PAGE_ID) - ANCHE LA DOMENICA
     dynamic_page_title = f"#primepagine del {today_formatted}"
 
     schema_data = {
@@ -286,7 +286,12 @@ def main():
     ).execute()
     print(f"[SUCCESS] Pagina fissa aggiornata: {updated_page.get('url')}")
 
-    # 2. CREA IL NUOVO ARTICOLO GIORNALIERO CON SINTESI EDITORIALE PULITA
+    # 2. LA DOMENICA (weekday == 6) SALTA IL POST BREVE: ESCE SOLO LA RASSEGNA COMPLETA
+    if today.weekday() == 6:
+        print("[INFO] Oggi è domenica: salto il post breve per evitare doppioni con la Rassegna Stampa Domenicale.")
+        return
+
+    # 3. DAL LUNEDÌ AL SABATO CREA IL NUOVO ARTICOLO GIORNALIERO CON SINTESI EDITORIALE PULITA
     post_title = f"Prime pagine dei quotidiani di oggi {today_full}: i titoli in edicola"
     existing_url = post_already_exists_today(blogger_service, blog_id, post_title)
     if existing_url:
