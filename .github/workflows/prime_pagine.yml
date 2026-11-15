@@ -2,11 +2,11 @@ name: Aggiornamento Edicola Prime Pagine
 
 on:
   schedule:
-    # 04:00 UTC = 06:00 ora italiana in estate (ora legale CEST)
-    # 05:00 UTC = 06:00 ora italiana in inverno (ora solare CET)
-    - cron: '0 4 * * *'
-    - cron: '0 5 * * *'
-  workflow_dispatch: # Permette anche l'avvio manuale dalla scheda Actions
+    # 04:12 UTC = 06:12 ora italiana (ora legale CEST)
+    # 05:12 UTC = 06:12 ora italiana (ora solare CET)
+    - cron: '12 4 * * *'
+    - cron: '12 5 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
