@@ -320,9 +320,6 @@ def main():
     papers_js_json = json.dumps(papers, ensure_ascii=False)
 
     page_html = f"""
-<script type="application/ld+json">
-{schema_json}
-</script>
 <style>
   .prime-pagine-container {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 10px; }}
   .prime-pagine-header {{ text-align: center; margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }}
