@@ -1,8 +1,10 @@
 import os
+import html
 import json
 import datetime
 import requests
 import zoneinfo
+import feedparser
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
@@ -41,9 +43,14 @@ QUOTIDIANI_MAP = [
 
 RSS_QUOTIDIANI = [
     {"source": "ANSA", "url": "https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml"},
-    {"source": "Corriere della Sera", "url": "https://xml2.corriereobjects.it/rss/homepage.xml"},
+    {"source": "Corriere della Sera", "url": "https://www.corriere.it/dynamic-feed/rss/section/Politica.xml"},
     {"source": "La Repubblica", "url": "https://www.repubblica.it/rss/homepage/rss2.0.xml"},
-    {"source": "Il Sole 24 Ore", "url": "https://www.ilsole24ore.com/rss/italia.xml"}
+    {"source": "Il Sole 24 Ore", "url": "https://www.ilsole24ore.com/rss/italia.xml"},
+    {"source": "La Stampa", "url": "https://www.lastampa.it/rss/copertina.xml"},
+    {"source": "Il Fatto Quotidiano", "url": "https://www.ilfattoquotidiano.it/feed/"},
+    {"source": "Adnkronos", "url": "https://www.adnkronos.com/RSS_PrimaPagina.xml"},
+    {"source": "Sky TG24", "url": "https://tg24.sky.it/rss/tg24.xml"},
+    {"source": "Il Post", "url": "https://www.ilpost.it/feed/"}
 ]
 
 MESI_ITA = {
@@ -112,14 +119,12 @@ def fetch_and_save_prime_pagine(cache_bust):
                 elif img_src.startswith("/"):
                     img_src = "https://giornali.it" + img_src
 
-                # Scarica e salva l'immagine nel repository static.brunorachiele.it
                 img_resp = session.get(img_src, headers=headers, timeout=15)
                 if img_resp.status_code == 200 and len(img_resp.content) > 5000:
                     ext = ".webp" if ".webp" in img_src.lower() else (".png" if ".png" in img_src.lower() else ".jpg")
                     filename = f"{slug}{ext}"
                     filepath = os.path.join(STATIC_REPO_DIR, filename)
 
-                    # Rimuove eventuali vecchie estensioni diverse dello stesso giornale
                     for old_ext in [".jpg", ".jpeg", ".png", ".webp"]:
                         old_path = os.path.join(STATIC_REPO_DIR, f"{slug}{old_ext}")
                         if old_path != filepath and os.path.exists(old_path):
@@ -152,20 +157,43 @@ def fetch_morning_headlines():
     headlines = []
     for feed in RSS_QUOTIDIANI:
         try:
-            r = requests.get(feed["url"], headers=headers, timeout=10)
-            if r.status_code == 200:
-                xml_root = ET.fromstring(r.content)
-                for item in xml_root.findall("./channel/item"):
-                    title_el = item.find("title")
-                    if title_el is not None and title_el.text:
-                        clean_title = BeautifulSoup(title_el.text, "html.parser").get_text().strip()
-                        if len(clean_title) > 15:
-                            headlines.append({
-                                "source": feed["source"],
-                                "title": clean_title
-                            })
-                            print(f"[+] Titolo RSS estratto da {feed['source']}: {clean_title[:60]}...")
-                            break
+            r = requests.get(feed["url"], headers=headers, timeout=12)
+            if r.status_code != 200:
+                print(f"[-] HTTP {r.status_code} su RSS {feed['source']}")
+                continue
+
+            parsed = feedparser.parse(r.content)
+            entries = parsed.entries or []
+
+            # Ordina sempre dalla notizia più recente alla più vecchia
+            entries_with_date = [e for e in entries if e.get("published_parsed") or e.get("updated_parsed")]
+            if entries_with_date:
+                entries = sorted(
+                    entries_with_date,
+                    key=lambda e: e.get("published_parsed") or e.get("updated_parsed"),
+                    reverse=True
+                )
+
+            for entry in entries:
+                raw_title = entry.get("title", "")
+                clean_title = BeautifulSoup(raw_title, "html.parser").get_text().strip()
+                if len(clean_title) <= 15:
+                    continue
+
+                raw_summary = entry.get("summary") or entry.get("description") or ""
+                clean_summary = " ".join(BeautifulSoup(raw_summary, "html.parser").get_text().split())
+                if len(clean_summary) > 145:
+                    clean_summary = clean_summary[:142].rsplit(" ", 1)[0] + "..."
+                if clean_summary.lower() == clean_title.lower():
+                    clean_summary = ""
+
+                headlines.append({
+                    "source": feed["source"],
+                    "title": clean_title,
+                    "summary": clean_summary
+                })
+                print(f"[+] Titolo RSS estratto da {feed['source']}: {clean_title[:60]}...")
+                break
         except Exception as e:
             print(f"[-] Errore lettura RSS {feed['source']}: {e}")
     return headlines
@@ -277,7 +305,7 @@ def main():
 
     cards_html = ""
     for idx, p in enumerate(papers):
-        safe_title = p["title"].replace('"', "&quot;")
+        safe_title = html.escape(p["title"], quote=True)
         cards_html += f"""
     <div class="paper-card" onclick="openPaperLightbox({idx})" role="button" tabindex="0" aria-label="Ingrandisci prima pagina {safe_title}">
       <div class="paper-img-container">
@@ -285,7 +313,7 @@ def main():
         <span class="zoom-badge">🔍 Ingrandisci</span>
       </div>
       <div class="paper-info">
-        <h3>📰 {p['title']}</h3>
+        <h3>📰 {safe_title}</h3>
       </div>
     </div>"""
 
@@ -442,10 +470,18 @@ def main():
     if headlines:
         blocks = []
         for h in headlines:
+            safe_source = html.escape(h["source"])
+            safe_h_title = html.escape(h["title"])
+            safe_summary = html.escape(h["summary"]) if h.get("summary") else ""
+            summary_html = (
+                f"<p style='margin:6px 0 0; font-size:0.86rem; color:#475569; line-height:1.45;'>{safe_summary}</p>"
+                if safe_summary else ""
+            )
             blocks.append(
                 f"<div style='padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px;'>"
-                f"<span style='display:inline-block; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#0b4a9f; margin-bottom:4px;'>{h['source']}</span>"
-                f"<p style='margin:0; font-size:0.98rem; font-weight:600; color:#0f172a; line-height:1.45;'>&laquo;{h['title']}&raquo;</p>"
+                f"<span style='display:inline-block; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#0b4a9f; margin-bottom:4px;'>{safe_source}</span>"
+                f"<p style='margin:0; font-size:0.98rem; font-weight:600; color:#0f172a; line-height:1.45;'>&laquo;{safe_h_title}&raquo;</p>"
+                f"{summary_html}"
                 f"</div>"
             )
         cards_grid = "".join(blocks)
@@ -460,7 +496,10 @@ def main():
     latest_articles = fetch_latest_3_articles()
     feed_html = ""
     if latest_articles:
-        items_li = "".join(f'<li><a href="{a["link"]}">{a["title"]}</a></li>' for a in latest_articles)
+        items_li = "".join(
+            f'<li><a href="{a["link"]}">{html.escape(a["title"])}</a></li>'
+            for a in latest_articles
+        )
         feed_html = f"""
   <div style="margin-top:26px; padding:18px 20px; background:#f1f5f9; border-radius:10px; border:1px solid #cbd5e1;">
     <h2 style="margin:0 0 10px; font-size:1.15rem; color:#0f172a;">Da leggere oggi su brunorachiele.it</h2>
@@ -469,7 +508,10 @@ def main():
     </ul>
   </div>"""
 
-    quotidiani_list_html = "".join(f"<li><strong>{p['title']}</strong> — edizione di {today_full}</li>" for p in papers)
+    quotidiani_list_html = "".join(
+        f"<li><strong>{html.escape(p['title'])}</strong> — edizione di {today_full}</li>"
+        for p in papers
+    )
 
     post_html = f"""
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; max-width:820px; margin:0 auto; line-height:1.65; color:#1e293b;">
