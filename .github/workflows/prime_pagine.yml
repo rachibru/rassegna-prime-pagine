@@ -16,10 +16,10 @@ jobs:
       - name: Checkout repository principale
         uses: actions/checkout@v4
 
-      - name: Checkout repository static.brunorachiele.it
+      - name: Checkout repository imgbrunorachiele.it
         uses: actions/checkout@v4
         with:
-          repository: TUO_USERNAME/TUO_REPO_STATIC
+          repository: ${{ github.repository_owner }}/imgbrunorachiele.it
           token: ${{ secrets.STATIC_REPO_TOKEN }}
           path: static_repo
 
