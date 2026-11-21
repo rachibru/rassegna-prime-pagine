@@ -1,11 +1,13 @@
 import os
 import re
+import html
 import time
 import datetime
 import zoneinfo
 import urllib.parse
 import feedparser
 import requests
+from bs4 import BeautifulSoup
 from google import genai
 from google.genai import types
 
@@ -16,6 +18,18 @@ MGID_WIDGET_HTML = """
 <div data-type="_mgwidget" data-widget-id="2120271"></div>
 <script>(function(w,q){w[q]=w[q]||[];w[q].push(["_mgc.load"])})(window,"_mgq");</script>
 """
+
+RSS_QUOTIDIANI_DOMENICA = [
+    {"source": "ANSA", "url": "https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml"},
+    {"source": "Corriere della Sera", "url": "https://www.corriere.it/dynamic-feed/rss/section/Politica.xml"},
+    {"source": "La Repubblica", "url": "https://www.repubblica.it/rss/homepage/rss2.0.xml"},
+    {"source": "Il Sole 24 Ore", "url": "https://www.ilsole24ore.com/rss/italia.xml"},
+    {"source": "La Stampa", "url": "https://www.lastampa.it/rss/copertina.xml"},
+    {"source": "Il Fatto Quotidiano", "url": "https://www.ilfattoquotidiano.it/feed/"},
+    {"source": "Adnkronos", "url": "https://www.adnkronos.com/RSS_PrimaPagina.xml"},
+    {"source": "Sky TG24", "url": "https://tg24.sky.it/rss/tg24.xml"},
+    {"source": "Il Post", "url": "https://www.ilpost.it/feed/"}
+]
 
 
 def get_blogger_access_token(client_id, client_secret, refresh_token):
@@ -88,6 +102,74 @@ def fetch_weekly_news_rss():
     return news_text
 
 
+def build_rss_headlines_html():
+    """Recupera l'apertura più recente dai 9 feed RSS dei principali quotidiani italiani."""
+    print("Estrazione titoli RSS di apertura della domenica mattina...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    }
+    blocks = []
+
+    for feed in RSS_QUOTIDIANI_DOMENICA:
+        try:
+            r = requests.get(feed["url"], headers=headers, timeout=12)
+            if r.status_code != 200:
+                continue
+
+            parsed = feedparser.parse(r.content)
+            entries = parsed.entries or []
+
+            entries_with_date = [e for e in entries if e.get("published_parsed") or e.get("updated_parsed")]
+            if entries_with_date:
+                entries = sorted(
+                    entries_with_date,
+                    key=lambda e: e.get("published_parsed") or e.get("updated_parsed"),
+                    reverse=True
+                )
+
+            for entry in entries:
+                clean_title = BeautifulSoup(entry.get("title", ""), "html.parser").get_text().strip()
+                if len(clean_title) <= 15:
+                    continue
+
+                raw_summary = entry.get("summary") or entry.get("description") or ""
+                clean_summary = " ".join(BeautifulSoup(raw_summary, "html.parser").get_text().split())
+                if len(clean_summary) > 145:
+                    clean_summary = clean_summary[:142].rsplit(" ", 1)[0] + "..."
+                if clean_summary.lower() == clean_title.lower():
+                    clean_summary = ""
+
+                safe_source = html.escape(feed["source"])
+                safe_title = html.escape(clean_title)
+                safe_summary = html.escape(clean_summary)
+                summary_html = (
+                    f"<p style='margin:6px 0 0; font-size:0.86rem; color:#475569; line-height:1.45;'>{safe_summary}</p>"
+                    if safe_summary else ""
+                )
+                blocks.append(
+                    f"<div style='padding:12px 14px; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px;'>"
+                    f"<span style='display:inline-block; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#0b4a9f; margin-bottom:4px;'>{safe_source}</span>"
+                    f"<p style='margin:0; font-size:0.98rem; font-weight:600; color:#0f172a; line-height:1.45;'>&laquo;{safe_title}&raquo;</p>"
+                    f"{summary_html}"
+                    f"</div>"
+                )
+                break
+        except Exception as e:
+            print(f"[-] Errore RSS {feed['source']}: {e}")
+
+    if not blocks:
+        return ""
+
+    return f"""
+  <div style="margin:28px 0 18px; padding:18px; background:#f8fafc; border-left:4px solid #0b4a9f; border-radius:10px;">
+    <h2 style="margin:0 0 14px; font-size:1.15rem; color:#0f172a;">I temi principali in apertura stamattina</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+      {"".join(blocks)}
+    </div>
+  </div>
+"""
+
+
 def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=3):
     """Chiamata con retry per la generazione con Gemini API."""
     for attempt in range(1, max_retries + 1):
@@ -111,7 +193,7 @@ def generate_with_retry(gemini_client, prompt, sys_instruction, max_retries=3):
 
 
 def publish_to_blogger(blog_id, access_token, title, html_content):
-    """Pubblica il post direttamente con HTML e Schema.org in una sola operazione."""
+    """Pubblica il post su Blogger."""
     print("Pubblicazione post su Blogger...")
     url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts/"
 
@@ -165,8 +247,9 @@ def main():
         print(f"[INFO] Rassegna Stampa Domenicale già pubblicata oggi ({existing_url}). Stop.")
         return
 
-    # 2. Estrazione dati settimanali
+    # 2. Estrazione dati settimanali e feed RSS mattutini
     live_news_context = fetch_weekly_news_rss()
+    rss_headlines_html = build_rss_headlines_html()
 
     # 3. Inizializzazione Gemini Client
     gemini_client = genai.Client(api_key=gemini_api_key)
@@ -183,16 +266,16 @@ def main():
     {live_news_context}
 
     REGOLE PER IL TITOLO:
-    - La prima riga DEVE essere il titolo della rassegna dentro <h1>...</h1>.
-    - Deve evidenziare i 2 o 3 fatti politici/economici chiave della settimana.
+- La prima riga DEVE essere il titolo della rassegna dentro <h1>...</h1>.
+- Deve evidenziare i 2 o 3 fatti politici/economici chiave della settimana.
 
     STRUTTURA IN 6 CARD TEMATICHE (Solo tag HTML, no Markdown):
-    1. <div class="news-card"><div class="card-header"><h2>📌 Primo Piano & Attualità Settimanale</h2></div>...</div>
-    2. <div class="news-card"><div class="card-header"><h2>🏛️ Politica & Istituzioni</h2></div>...</div>
-    3. <div class="news-card"><div class="card-header"><h2>🌐 Esteri & Geopolitica</h2></div>...</div>
-    4. <div class="news-card"><div class="card-header"><h2>📰 Dalle Prime Pagine del Weekend</h2></div>...</div>
-    5. <div class="news-card"><div class="card-header"><h2>🗳️ Elezioni & Sondaggi</h2></div>...</div>
-    6. <div class="news-card"><div class="card-header"><h2>📈 Economia & Mercati</h2></div>...</div>
+1. <div class="news-card"><div class="card-header"><h2>📌 Primo Piano & Attualità Settimanale</h2></div>...</div>
+2. <div class="news-card"><div class="card-header"><h2>🏛️ Politica & Istituzioni</h2></div>...</div>
+3. <div class="news-card"><div class="card-header"><h2>🌐 Esteri & Geopolitica</h2></div>...</div>
+4. <div class="news-card"><div class="card-header"><h2>📰 Dalle Prime Pagine del Weekend</h2></div>...</div>
+5. <div class="news-card"><div class="card-header"><h2>🗳️ Elezioni & Sondaggi</h2></div>...</div>
+6. <div class="news-card"><div class="card-header"><h2>📈 Economia & Mercati</h2></div>...</div>
 
     Ogni card deve contenere una sintesi e terminare con la fonte:
     <div class="card-source">📰 Fonti della settimana: Nome Testata</div>
@@ -264,40 +347,14 @@ def main():
 </style>
 """
 
-    iso_date = now_rome.isoformat()
     safe_headline = post_title.replace('"', '\\"')
-
-    schema_org_script = f"""
-<script type="application/ld+json">
-{{
-  "@context": "https://schema.org",
-  "@type": "NewsArticle",
-  "headline": "{safe_headline}",
-  "image": ["{HEADER_IMAGE_URL}"],
-  "datePublished": "{iso_date}",
-  "dateModified": "{iso_date}",
-  "author": {{
-    "@type": "Person",
-    "name": "Bruno Rachiele",
-    "url": "https://www.brunorachiele.it/"
-  }},
-  "publisher": {{
-    "@type": "Organization",
-    "name": "Bruno Rachiele",
-    "logo": {{
-      "@type": "ImageObject",
-      "url": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiOeKLAFzNySkI5ahC_uZiv0Asne6shnjr1QndoMNmRBtkNdQfe59GGO3nY5nc5C4OCXNMXGXu1XtHm0X7gPqbvTgFjqszFGQrPD3G5R4c2MIJPiZCk5OX6dLbnYKeU1itEVo7OcJB9I0N-Wi9z9WP64l5_btoNMrZ111Ex8i-W9UcKwOJPv5uDnl6LwhA/s1600/2ed26cc2-38e4-4d67-a1c5-5e522b654c90%20%281%29.png"
-    }}
-  }}
-}}
-</script>
-"""
 
     final_article_html = f"""
 {custom_css}
 <div class="rassegna-container">
   <img src="{HEADER_IMAGE_URL}" alt="{safe_headline}" class="rassegna-header-img" />
   {body_content}
+  {rss_headlines_html}
 
   <div style="text-align:center; margin:26px 0; padding:22px 18px; background:linear-gradient(135deg,#0b4a9f 0%,#1d4ed8 100%); border-radius:12px; color:#ffffff;">
     <p style="margin:0 0 12px; font-size:1.15rem; font-weight:700; color:#ffffff;">Sfoglia tutte le prime pagine dei quotidiani di oggi in alta risoluzione</p>
@@ -310,7 +367,6 @@ def main():
     {MGID_WIDGET_HTML}
   </div>
 </div>
-{schema_org_script}
 """
 
     publish_to_blogger(blog_id, access_token, post_title, final_article_html)
