@@ -70,7 +70,7 @@ MGID_WIDGET_HTML = """
 """
 
 
-def fetch_and_save_prime_pagine(cache_bust):
+def fetch_and_save_prime_pagine():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -133,12 +133,12 @@ def fetch_and_save_prime_pagine(cache_bust):
                     with open(filepath, "wb") as f:
                         f.write(img_resp.content)
 
-                    final_url = f"{STATIC_BASE_URL}/{filename}?v={cache_bust}"
+                    final_url = f"{STATIC_BASE_URL}/{filename}"
                     papers.append({
                         "title": name,
                         "image_url": final_url
                     })
-                    print(f"[+] Salvata copertina di {name} -> {filename}")
+                    print(f"[+] Salvata copertina di {name} -> {final_url}")
                 else:
                     print(f"[-] Download immagine fallito per {name} (HTTP {img_resp.status_code})")
             else:
@@ -165,7 +165,6 @@ def fetch_morning_headlines():
             parsed = feedparser.parse(r.content)
             entries = parsed.entries or []
 
-            # Ordina sempre dalla notizia più recente alla più vecchia
             entries_with_date = [e for e in entries if e.get("published_parsed") or e.get("updated_parsed")]
             if entries_with_date:
                 entries = sorted(
@@ -258,9 +257,8 @@ def main():
     tz_rome = zoneinfo.ZoneInfo("Europe/Rome")
     now_rome = datetime.datetime.now(tz_rome)
     today = now_rome.date()
-    cache_bust = today.strftime("%Y%m%d")
 
-    papers = fetch_and_save_prime_pagine(cache_bust)
+    papers = fetch_and_save_prime_pagine()
     if not papers:
         print("Nessuna copertina estratta. Interruzione.")
         return
@@ -270,38 +268,9 @@ def main():
     today_formatted = f"{today.day} {month_name} {today.year}"
     today_full = f"{day_name} {today_formatted}"
     today_str = today.strftime("%d/%m/%Y")
-    now_iso = now_rome.isoformat()
 
-    # 1. AGGIORNA SEMPRE LA PAGINA EDICOLA FISSA CON LIGHTBOX + ZOOM
+    # 1. AGGIORNA SEMPRE LA PAGINA EDICOLA FISSA CON LIGHTBOX + ZOOM (SENZA SCHEMA.ORG)
     dynamic_page_title = f"#primepagine del {today_formatted}"
-
-    schema_data = {
-        "@context": "https://schema.org",
-        "@type": "NewsArticle",
-        "headline": f"Prime Pagine dei Giornali del {today_formatted}",
-        "description": f"Consulta le prime pagine e copertine dei principali quotidiani italiani ed esteri aggiornate al {today_formatted}.",
-        "datePublished": now_iso,
-        "dateModified": now_iso,
-        "mainEntityOfPage": {
-            "@type": "WebPage",
-            "@id": STATIC_PAGE_URL
-        },
-        "author": {
-            "@type": "Person",
-            "name": "Bruno Rachiele",
-            "url": "https://bio.brunorachiele.it/"
-        },
-        "publisher": {
-            "@type": "Organization",
-            "name": "brunorachiele.it",
-            "logo": {
-                "@type": "ImageObject",
-                "url": COVER_IMAGE_URL
-            }
-        },
-        "image": [p["image_url"] for p in papers[:3]]
-    }
-    schema_json = json.dumps(schema_data, ensure_ascii=False)
 
     cards_html = ""
     for idx, p in enumerate(papers):
