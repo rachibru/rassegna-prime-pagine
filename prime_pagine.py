@@ -64,10 +64,7 @@ GIORNI_ITA = {
     4: "venerdì", 5: "sabato", 6: "domenica"
 }
 
-MGID_WIDGET_HTML = """
-<div data-type="_mgwidget" data-widget-id="2120271"></div>
-<script>(function(w,q){w[q]=w[q]||[];w[q].push(["_mgc.load"])})(window,"_mgq");</script>
-"""
+PERSONAL_AD_HTML = '<div class="br-ad-slot" data-slot="in-article-1"></div>'
 
 
 def fetch_and_save_prime_pagine():
@@ -488,6 +485,10 @@ def main():
   <p>Buongiorno da <strong>brunorachiele.it</strong>. Ecco la rassegna stampa mattutina di <strong>{today_full}</strong> con i principali titoli in apertura su politica, economia ed esteri e l'accesso diretto all'edicola digitale completa dei quotidiani oggi in uscita.</p>
 
   {headlines_html}
+
+  <div style="margin:22px auto; text-align:center;">
+    {PERSONAL_AD_HTML}
+  </div>
 
   <div style="text-align:center; margin:24px 0; padding:22px 18px; background:linear-gradient(135deg,#0b4a9f 0%,#1d4ed8 100%); border-radius:12px; color:#ffffff;">
     <p style="margin:0 0 12px; font-size:1.15rem; font-weight:700; color:#ffffff;">Sfoglia tutte le prime pagine di oggi in alta risoluzione</p>
