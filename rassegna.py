@@ -14,10 +14,7 @@ from google.genai import types
 HEADER_IMAGE_URL = "https://static.brunorachiele.it/rassegnastampa.png"
 STATIC_PAGE_URL = "https://www.brunorachiele.it/p/prime-pagine-dei-giornali.html"
 
-MGID_WIDGET_HTML = """
-<div data-type="_mgwidget" data-widget-id="2120271"></div>
-<script>(function(w,q){w[q]=w[q]||[];w[q].push(["_mgc.load"])})(window,"_mgq");</script>
-"""
+PERSONAL_AD_HTML = '<div class="br-ad-slot" data-slot="in-article-1"></div>'
 
 RSS_QUOTIDIANI_DOMENICA = [
     {"source": "ANSA", "url": "https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml"},
@@ -356,15 +353,15 @@ def main():
   {body_content}
   {rss_headlines_html}
 
+  <div style="margin:22px auto; text-align:center;">
+    {PERSONAL_AD_HTML}
+  </div>
+
   <div style="text-align:center; margin:26px 0; padding:22px 18px; background:linear-gradient(135deg,#0b4a9f 0%,#1d4ed8 100%); border-radius:12px; color:#ffffff;">
     <p style="margin:0 0 12px; font-size:1.15rem; font-weight:700; color:#ffffff;">Sfoglia tutte le prime pagine dei quotidiani di oggi in alta risoluzione</p>
     <a href="{STATIC_PAGE_URL}" style="display:inline-block; background:#ffffff; color:#0b4a9f !important; font-weight:700; padding:12px 24px; border-radius:50px; text-decoration:none; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
       Apri l'Edicola Digitale del {today_formatted} &rarr;
     </a>
-  </div>
-
-  <div style="margin:24px auto; text-align:center;">
-    {MGID_WIDGET_HTML}
   </div>
 </div>
 """
