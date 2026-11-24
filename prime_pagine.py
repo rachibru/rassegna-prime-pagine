@@ -497,10 +497,6 @@ def main():
     </a>
   </div>
 
-  <div style="margin:24px auto; text-align:center;">
-    {MGID_WIDGET_HTML}
-  </div>
-
   <h2 style="font-size:1.2rem; color:#0f172a; margin-top:24px;">I quotidiani disponibili nell'edizione di oggi</h2>
   <ul style="padding-left:20px; line-height:1.7;">
     {quotidiani_list_html}
